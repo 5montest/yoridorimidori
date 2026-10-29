@@ -12,6 +12,7 @@ import { MockLocationProvider } from './src/adapters/mock/MockLocationProvider';
 import { MockSensorControllerImpl } from './src/adapters/mock/MockSensorControllerImpl';
 import { startMockTicker } from './src/adapters/mock/mockTicker';
 import { AsyncStorageDestinationRepository } from './src/adapters/storage/AsyncStorageDestinationRepository';
+import { AsyncStoragePreferencesRepository } from './src/adapters/storage/AsyncStoragePreferencesRepository';
 import { AsyncStorageSampleLogRepository } from './src/adapters/storage/AsyncStorageSampleLogRepository';
 import { DEFAULT_THRESHOLDS } from './src/domain/constants';
 import { filterFavorites, recentDestinations } from './src/domain/destinationOrder';
@@ -100,6 +101,7 @@ function createRuntime(): AppRuntime {
   const placeSearch = new ExpoPlaceSearchProvider({ clock });
   const clipboard = new ExpoClipboardProvider({ clock });
   const deepLink = new ExpoLinkingProvider({ clock });
+  const preferences = new AsyncStoragePreferencesRepository();
 
   const deps: NavAppDeps = {
     clock,
@@ -119,7 +121,7 @@ function createRuntime(): AppRuntime {
     placeSearch,
     clipboard,
     deepLink,
-    preferences: null,
+    preferences,
   };
 }
 
