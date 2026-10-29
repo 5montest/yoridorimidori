@@ -33,7 +33,7 @@
 | [architecture.md](architecture.md) | アーキテクチャ設計（レイヤ・インターフェース・テスト戦略） |
 | [tasks.md](tasks.md) | 実装タスク分解（1タスクずつ実装・テスト） |
 | [docs/deploy.md](docs/deploy.md) | **デプロイ手順**（EAS Build で配布用 APK/AAB を作る） |
-| [docs/research/](docs/research/) | ライブラリ API の一次情報調査・PC 構築実証・本番ビルド可否検証 |
+| [docs/research/](docs/research/) | 一次情報調査・PC 構築実証・**実機検証（D1〜D7）**・最終検証・本番ビルド可否検証 |
 
 ## リポジトリ構成
 
@@ -135,9 +135,15 @@ npx eas-cli@latest build -p android --profile preview    # 配布用 APK（inter
 - [x] フェーズ1: 仕様策定（requirements / architecture / tasks）
 - [x] フェーズ1: プロジェクト雛形構築・PC 上でのビルド検証（`tsc --noEmit` / `jest --runInBand` / Metro バンドル）
 - [x] フェーズ1: Android 実機での起動確認（Pixel 4a / Expo Go 58.0.5 / `adb reverse`）
-- [x] M1: ドメイン層（T01〜T10・純粋関数・211 tests）
+- [x] M1: ドメイン層（T01〜T10・純粋関数・境界条件テスト）
 - [x] M2: アダプタ層（T11〜T18・Mock センサー / AsyncStorage / expo-location）
-- [ ] M3: 状態管理・UI（T19〜T25）— 実装中
-- [ ] M4: 地図・仕上げ（T26〜T28）— T26 完了
-- [ ] 実機検証 D1〜D7（鳥の向き・権限・復元・オフライン・地図）
-- [ ] デプロイビルド（EAS Build）
+- [x] M3: 状態管理・UI（T19〜T25・オオハシ表示・精度/鮮度パネル・目的地/開発画面）
+- [x] M4: 地図・仕上げ（T26〜T28・`react-native-maps` / 最終検証）
+- [x] 実機検証 D1〜D7（鳥の向き・権限フロー・再起動復元・オフライン・地図）
+- [x] 品質: **437 tests PASS / `tsc` 0 エラー / 本番バンドル生成 / 外部通信 0 件**
+- [ ] 配布ビルド（EAS Build）— Expo アカウントでの `eas login` が必要（[docs/deploy.md](docs/deploy.md)）
+
+### 検証レポート
+
+- [実機検証 D1〜D7](docs/research/device-verification.md) — 鳥の向き（145°/218°/188°/到着）、権限フロー、永続化、記録、地図、オフライン
+- [最終検証 T28](docs/research/final-verification.md) — テスト・カバレッジ・バンドル・依存ルール・§18 消化状況
