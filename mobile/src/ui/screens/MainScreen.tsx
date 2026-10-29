@@ -18,8 +18,6 @@ import {
 import { Bird } from '../components/Bird';
 import { DestinationChip } from '../components/DestinationChip';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { StatusDetailSheet } from '../components/StatusDetailSheet';
-import { StatusSummaryBar } from '../components/StatusSummaryBar';
 
 export interface MainScreenProps {
   /** 表示用の派生値（domain の計算結果。UI では再計算しない）。 */
@@ -28,8 +26,6 @@ export interface MainScreenProps {
   readonly destinationName: string | null;
   /** お気に入り状態。`null` は未対応（☆ を出さない）。 */
   readonly destinationFavorite: boolean | null;
-  /** GPS 精度の生値（m）。ステータス詳細シートのみで数値として使う。 */
-  readonly gpsAccuracyM: number | null;
   /** 位置情報の権限状態（拒否時の案内に使う）。 */
   readonly permission: PermissionOutcome | null;
   /** 目的地チップ・主要ボタンから S3（目的地を選ぶ）へ。 */
@@ -47,7 +43,9 @@ export interface MainScreenProps {
  * - **表示専用**。`NavState` と目的地名・コールバックを props で受け取り、
  *   `hooks` / `adapters` を import しない。
  * - 目的地チップ（名前 + ▾ + ☆）/ 大きなオオハシ / 大きな距離 / 8 方位の言葉 /
- *   1 行サマリ（タップで S6）/ 主要ボタン「目的地を選ぶ」。
+ *   主要ボタン「目的地を選ぶ」。
+ * - **GPS・コンパスの状態表示（1 行サマリ）は置かない**（2026-10-30 変更）。
+ *   精度・鮮度の詳細は開発メニュー S7 の「状態の詳細」から開く（`StatusDetailSheet`）。
  * - **Mock・記録・生の精度数値は常時表示しない**（開発メニュー S7 へ隔離）。
  * - 権限拒否・位置不明・測位中は「次に何をすればよいか」を 1 文で示す（UX-5）。
  */
@@ -55,7 +53,6 @@ export function MainScreen({
   nav,
   destinationName,
   destinationFavorite,
-  gpsAccuracyM,
   permission,
   onOpenDestinationPicker,
   onToggleFavorite,
@@ -63,7 +60,6 @@ export function MainScreen({
   onRetryLocation,
   onOpenDevMenu,
 }: MainScreenProps): ReactElement {
-  const [detailVisible, setDetailVisible] = useState(false);
   const [permissionDismissed, setPermissionDismissed] = useState(false);
 
   const arrived = nav.status === 'arrived';
@@ -97,10 +93,6 @@ export function MainScreen({
     }
     return `${UI_TEXT.main.directionPrefix} ${directionWordLabel(nav.relativeBearingDeg)}`;
   };
-
-  const primaryLabel = arrived
-    ? UI_TEXT.main.changeDestinationShort
-    : UI_TEXT.main.selectDestination;
 
   return (
     <View style={styles.screen}>
@@ -170,23 +162,7 @@ export function MainScreen({
           ) : null}
           <Text style={styles.caption}>{directionCaption()}</Text>
         </View>
-
-        <View style={styles.bottomArea}>
-          <StatusSummaryBar
-            gpsAccuracyClass={nav.gpsAccuracyClass}
-            headingAccuracyClass={nav.headingAccuracyClass}
-            onPress={() => setDetailVisible(true)}
-          />
-          <PrimaryButton label={primaryLabel} onPress={onOpenDestinationPicker} />
-        </View>
       </ScrollView>
-
-      <StatusDetailSheet
-        visible={detailVisible}
-        nav={nav}
-        gpsAccuracyM={gpsAccuracyM}
-        onClose={() => setDetailVisible(false)}
-      />
     </View>
   );
 }
@@ -290,10 +266,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: 'center',
     lineHeight: 24,
-  },
-  bottomArea: {
-    marginTop: 'auto',
-    gap: SPACING.md,
   },
   stateCard: {
     backgroundColor: COLORS.surfaceAlt,

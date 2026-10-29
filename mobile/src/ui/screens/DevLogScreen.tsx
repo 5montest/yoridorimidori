@@ -39,6 +39,8 @@ export interface DevLogScreenProps {
   readonly onOpenCoordinateSetting: () => void;
   /** オンボーディング（S1）を再表示する（App が表示状態を制御）。 */
   readonly onResetOnboarding?: () => void;
+  /** 状態の詳細（S6: GPS・コンパス精度・鮮度）を開く（一般画面には置かない）。 */
+  readonly onOpenStatusDetail?: () => void;
   readonly onBack: () => void;
 }
 
@@ -63,6 +65,7 @@ export function DevLogScreen({
   onSelectScenario,
   onOpenCoordinateSetting,
   onResetOnboarding,
+  onOpenStatusDetail,
   onBack,
 }: DevLogScreenProps): ReactElement {
   const summary = useMemo(
@@ -79,6 +82,15 @@ export function DevLogScreen({
       <View style={styles.screen}>
         <Text style={styles.title}>{UI_TEXT.devMenu.title}</Text>
         <Text style={styles.note}>{UI_TEXT.mockControl.devOnlyNote}</Text>
+        {onOpenStatusDetail === undefined ? null : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenStatusDetail}
+            style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.backButtonText}>{UI_TEXT.devMenu.statusDetailOpen}</Text>
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
           onPress={onBack}
@@ -116,6 +128,20 @@ export function DevLogScreen({
               style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
             >
               <Text style={styles.backButtonText}>{UI_TEXT.devMenu.onboardingReset}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {onOpenStatusDetail === undefined ? null : (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{UI_TEXT.devMenu.statusDetail}</Text>
+            <Text style={styles.note}>{UI_TEXT.devMenu.statusDetailNote}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onOpenStatusDetail}
+              style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.backButtonText}>{UI_TEXT.devMenu.statusDetailOpen}</Text>
             </Pressable>
           </View>
         )}

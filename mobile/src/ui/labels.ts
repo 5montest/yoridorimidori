@@ -520,8 +520,6 @@ export const UI_TEXT = {
     favoriteAdd: 'お気に入りに追加',
     favoriteRemove: 'お気に入りから外す',
     directionPrefix: '目的地は',
-    selectDestination: '目的地を選ぶ',
-    changeDestinationShort: '目的地を変える',
     arrivedTitle: '到着しました',
     arrivedBody: '目的地に着きました。おつかれさまでした。',
     locatingTitle: '現在地を探しています…',
@@ -536,7 +534,6 @@ export const UI_TEXT = {
     positionLostBody: '屋外に出るか、端末の位置情報がオンになっているか確認してください。',
     noDestinationBody: '目的地を選ぶと、オオハシが方向を教えます。',
     headingUnknownBody: 'コンパスを準備しています。端末を軽く動かしてみてください。',
-    statusSummaryHint: 'タップして詳しく見る',
     devMenuHint: 'タイトルを長押し',
   },
   /** 状態の詳細（S6）*/
@@ -701,6 +698,9 @@ export const UI_TEXT = {
       '通常の目的地設定は「目的地を選ぶ」から地図・検索で行います。座標入力は開発用です。',
     logSection: '記録・Mock',
     onboardingReset: 'オンボーディングを再表示',
+    statusDetail: '状態の詳細',
+    statusDetailNote: 'GPS・コンパスの精度と鮮度を確認します（一般画面には表示しません）。',
+    statusDetailOpen: '状態の詳細を表示',
   },
   /** 目的地を選ぶ（S3）*/
   destinationPicker: {

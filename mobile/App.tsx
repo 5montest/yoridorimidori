@@ -33,6 +33,7 @@ import type { PreferencesRepository } from './src/ports/preferences';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { ScreenSwitcher } from './src/ui/components/ScreenSwitcher';
 import { SharedDestinationSheet } from './src/ui/components/SharedDestinationSheet';
+import { StatusDetailSheet } from './src/ui/components/StatusDetailSheet';
 import {
   UI_TEXT,
   type ScreenId,
@@ -232,6 +233,9 @@ export default function App(): ReactElement {
     readonly kind: 'ready' | 'needs-resolution';
     readonly destination: ResolvedSharedDestination | null;
   } | null>(null);
+
+  // 状態の詳細（S6）。一般画面のサマリは廃止し、開発メニューから開く（2026-10-30）。
+  const [statusDetailVisible, setStatusDetailVisible] = useState(false);
 
   useEffect(() => {
     if (sharedText === null) {
@@ -445,6 +449,7 @@ export default function App(): ReactElement {
         onSelectScenario={(id) => actions.selectScenario(id)}
         onOpenCoordinateSetting={() => setScreen('add')}
         onResetOnboarding={resetOnboarding}
+        onOpenStatusDetail={() => setStatusDetailVisible(true)}
         onBack={() => setScreen('main')}
       />
     );
@@ -474,7 +479,6 @@ export default function App(): ReactElement {
           nav={nav}
           destinationName={selectedDestination?.name ?? null}
           destinationFavorite={selectedDestination?.favorite ?? null}
-          gpsAccuracyM={state.location?.accuracyM ?? null}
           permission={state.permission}
           onOpenDestinationPicker={() => setScreen('destinations')}
           onToggleFavorite={() => {
@@ -545,6 +549,12 @@ export default function App(): ReactElement {
           }
         }}
         onDismiss={() => setIncomingShared(null)}
+      />
+      <StatusDetailSheet
+        visible={statusDetailVisible}
+        nav={nav}
+        gpsAccuracyM={state.location?.accuracyM ?? null}
+        onClose={() => setStatusDetailVisible(false)}
       />
     </View>
   );
