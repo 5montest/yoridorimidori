@@ -40,6 +40,7 @@ export const SPACING = {
   md: 16,
   lg: 24,
   xl: 32,
+  xxl: 48,
 } as const;
 
 /** 文字サイズ。一般ユーザー向けに主要数値は 40pt 以上（UX-7）。 */

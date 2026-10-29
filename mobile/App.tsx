@@ -237,11 +237,16 @@ export default function App(): ReactElement {
     if (sharedText === null) {
       return undefined;
     }
+    const titleHint = shareIntent.payload?.title ?? null;
     let disposed = false;
     void (async () => {
-      const resolved = await resolveSharedText(sharedText);
+      const resolved = await resolveSharedText(sharedText, undefined, titleHint);
       if (disposed) {
         return;
+      }
+      if (resolved === null && __DEV__) {
+        // 実機検証用: 解決できなかった共有内容を logcat に残す。
+        console.log('[share-intent] unresolved:', sharedText);
       }
       setIncomingShared(
         resolved === null

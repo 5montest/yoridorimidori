@@ -138,22 +138,20 @@ npx eas-cli@latest build -p android --profile preview    # 配布用 APK（inter
 - [x] M1: ドメイン層（T01〜T10・純粋関数・境界条件テスト）
 - [x] M2: アダプタ層（T11〜T18・Mock センサー / AsyncStorage / expo-location）
 - [x] M3: 状態管理・UI（T19〜T25・オオハシ表示・精度/鮮度パネル・目的地/開発画面）
-- [x] M4: 地図・仕上げ（T26〜T28・`react-native-maps` / 最終検証）
+- [x] M4: 地図・仕上げ（T26〜T28・最終検証）
 - [x] 実機検証 D1〜D7（鳥の向き・権限フロー・再起動復元・オフライン・地図）
-- [x] 品質: **604 tests PASS / `tsc` 0 エラー / 本番バンドル生成 / 外部通信 0 件**
-- [x] **配布用 APK のローカルビルド成功**（`app-debug.apk` 53.5MB・JS バンドル同梱・実機インストール/起動確認済み）
-- [x] **共有ターゲット対応**（Google マップ等の「共有」に表示・共有テキストから目的地設定。`expo-share-intent`）
-- [x] **地図**: API キー無しビルドでもクラッシュせずフォールバック表示（`GOOGLE_MAPS_API_KEY` を設定して再ビルドすると地図有効）
+- [x] 品質: **643 tests PASS / `tsc` 0 エラー / 本番バンドル生成**
+- [x] **配布用 APK のローカルビルド成功**（`app-debug.apk` 51.1MB・JS バンドル同梱・実機インストール/起動確認済み）
+- [x] **共有ターゲット対応**（Google マップ等の「共有」に表示・短縮リンク解決・場所名取得まで実機検証済み。`expo-share-intent`）
+- [x] **地図**: OpenStreetMap タイル地図（**API キー不要・従量課金なし**・帰属表示あり）
 - [x] Phase 4: UX 刷新（座標直打ち廃止・地図/検索/現在地/最近/お気に入り/共有リンク/ディープリンク・オンボーディング・開発メニュー隔離）
 - [ ] ストア配布用の release ビルド（EAS Build 推奨。ローカル release は CMake ループで未解決）
 
-### 地図を有効にする（API キー）
+### 地図について
 
-```powershell
-$env:GOOGLE_MAPS_API_KEY = "<Google Cloud の Maps SDK for Android キー>"
-cd mobile; npx expo prebuild --platform android --clean
-# ビルド（scripts/build-apk.ps1 または .apk-build 手順）
-```
+- 地図は **OpenStreetMap のラスタータイル**（`tile.openstreetmap.org`）を使用。**API キー・課金は不要**。
+- 帰属表示（© OpenStreetMap contributors）を常時表示。
+- タイル利用ポリシー（大量アクセス禁止）に留意。本番規模では自前タイルサーバ/商用プロバイダ（MapTiler 等）を検討。
 
 キー未設定のビルドでは、地図画面は「地図を表示できません（API キー未設定）」の案内になります（クラッシュしません）。
 

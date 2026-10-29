@@ -1,42 +1,24 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import Constants from 'expo-constants';
 import type { GeoPoint } from '../../domain/types';
+import { clampZoom } from '../../domain/tileMath';
 import { UI_TEXT } from '../labels';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, TAP_TARGET_MIN } from '../theme';
+import { OsmMapView } from '../components/OsmMapView';
 import { PrimaryButton } from '../components/PrimaryButton';
 
-/** 初期中心が無いときの既定領域（東京駅周辺）。 */
-const DEFAULT_REGION = {
-  latitude: 35.681236,
-  longitude: 139.767125,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
-};
+/** 初期中心が無いときの既定位置（東京駅周辺）。 */
+const DEFAULT_CENTER: GeoPoint = { latitude: 35.681236, longitude: 139.767125 };
 
-/** 現在地だけ分かっているときの拡大率（度）。 */
-const SINGLE_POINT_DELTA = 0.01;
+/** 初期ズーム。 */
+const DEFAULT_ZOOM = 15;
 
-/**
- * 地図を描画できるか。
- *
- * - **Expo Go**（`storeClient`）は Expo Go 自身が Google Maps のキーを持つため描画できる。
- * - **カスタムビルド（APK）** は `GOOGLE_MAPS_API_KEY` を指定してビルドした場合のみ描画できる。
- *   キー無しで `MapView` を描画すると `IllegalStateException: API key not found` で**アプリが落ちる**ため、
- *   `app.config.js` の `extra.hasGoogleMapsKey` を見て事前に分岐する。
- */
-const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
-const HAS_MAPS_KEY: boolean = (() => {
-  if (IS_EXPO_GO) {
-    return true;
-  }
-  const extra = Constants.expoConfig?.extra as { readonly hasGoogleMapsKey?: boolean } | undefined;
-  return extra?.hasGoogleMapsKey === true;
-})();
+/** UI で許可するズーム範囲（広域〜街区）。 */
+const MIN_UI_ZOOM = 10;
+const MAX_UI_ZOOM = 18;
 
 export interface MapScreenProps {
-  /** 地図の初期中心（現在地。無ければ既定領域）。 */
+  /** 地図の初期中心（現在地。無ければ既定位置）。 */
   readonly initialPoint: GeoPoint | null;
   /** 選択中の地点（未選択なら `null`）。 */
   readonly selectedPoint: GeoPoint | null;
@@ -52,15 +34,12 @@ export interface MapScreenProps {
 }
 
 /**
- * 地図で選ぶ画面（S4）。F2 / U07。
+ * 地図で選ぶ画面（S4）。
  *
- * - `MapView` の `onPress`（**確定済み API**: `event.nativeEvent.coordinate`）で地点を選ぶ。
- * - **`react-native-maps` を import する唯一のファイル**。
- * - 使用 props は確定済みのものだけ（notes §3.3 / §3.4）: `initialRegion` / `showsCompass` /
- *   `showsMyLocationButton` / `liteMode`、`Marker` の `coordinate` / `title` / `identifier`。
- * - `showsUserLocation` は使わない（権限なしで無言失敗するため。ADR-10）。
- * - 座標は UI に出さない（UX-1）。確定操作は「この場所を目的地にする」。
- * - **API キーが無いビルドでは地図を描画せず**、フォールバック案内を表示する（クラッシュ防止）。
+ * - **OpenStreetMap のラスタータイル**（`OsmMapView`）で描画する。Google Maps の API キー・従量課金は不要。
+ * - タップ位置を `screenPointToGeo`（純粋関数）で座標に変換し、`onPick` に渡す。
+ * - 選択後はマーカー表示＋逆ジオコーディングした場所名を表示し、「この場所を目的地にする」で確定。
+ * - 座標は UI に出さない（UX-1）。
  */
 export function MapScreen({
   initialPoint,
@@ -71,27 +50,9 @@ export function MapScreen({
   onConfirm,
   onBack,
 }: MapScreenProps): ReactElement {
-  if (!HAS_MAPS_KEY) {
-    return <MapUnavailable onBack={onBack} />;
-  }
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
 
-  const region =
-    selectedPoint !== null
-      ? {
-          latitude: selectedPoint.latitude,
-          longitude: selectedPoint.longitude,
-          latitudeDelta: SINGLE_POINT_DELTA,
-          longitudeDelta: SINGLE_POINT_DELTA,
-        }
-      : initialPoint !== null
-        ? {
-            latitude: initialPoint.latitude,
-            longitude: initialPoint.longitude,
-            latitudeDelta: SINGLE_POINT_DELTA,
-            longitudeDelta: SINGLE_POINT_DELTA,
-          }
-        : DEFAULT_REGION;
-
+  const center: GeoPoint = selectedPoint ?? initialPoint ?? DEFAULT_CENTER;
   const labelText = resolving
     ? UI_TEXT.mapPick.resolving
     : (selectedLabel ?? (selectedPoint === null ? UI_TEXT.mapPick.noSelection : ''));
@@ -101,6 +62,7 @@ export function MapScreen({
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={UI_TEXT.mapPick.back}
           onPress={onBack}
           style={({ pressed }) => [styles.backIcon, pressed ? styles.pressed : null]}
         >
@@ -110,35 +72,29 @@ export function MapScreen({
       </View>
 
       <View style={styles.mapArea}>
-        <MapView
-          style={styles.map}
-          initialRegion={region}
-          showsCompass
-          showsMyLocationButton={false}
-          showsUserLocation={false}
-          liteMode={false}
-          onPress={(event) => {
-            const coordinate = event.nativeEvent.coordinate;
-            onPick({ latitude: coordinate.latitude, longitude: coordinate.longitude });
-          }}
-        >
-          {initialPoint === null ? null : (
-            <Marker
-              coordinate={initialPoint}
-              title={UI_TEXT.mapScreen.currentLocationMarker}
-              identifier="current-location"
-            />
-          )}
-          {selectedPoint === null ? null : (
-            <Marker
-              coordinate={selectedPoint}
-              title={selectedLabel ?? UI_TEXT.mapPick.selectedLabel}
-              identifier="selected-point"
-            />
-          )}
-        </MapView>
+        <OsmMapView center={center} zoom={zoom} selected={selectedPoint} onPress={onPick} />
+
         <View style={styles.instructionBar} pointerEvents="none">
           <Text style={styles.instruction}>{UI_TEXT.mapPick.instruction}</Text>
+        </View>
+
+        <View style={styles.zoomControls}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={UI_TEXT.mapPick.zoomIn}
+            onPress={() => setZoom((current) => clampZoom(Math.min(MAX_UI_ZOOM, current + 1)))}
+            style={({ pressed }) => [styles.zoomButton, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.zoomText}>＋</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={UI_TEXT.mapPick.zoomOut}
+            onPress={() => setZoom((current) => clampZoom(Math.max(MIN_UI_ZOOM, current - 1)))}
+            style={({ pressed }) => [styles.zoomButton, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.zoomText}>−</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -151,29 +107,6 @@ export function MapScreen({
           onPress={onConfirm}
           disabled={selectedPoint === null || resolving}
         />
-      </View>
-    </View>
-  );
-}
-
-/** 地図が使えないビルド向けのフォールバック（クラッシュさせない）。 */
-function MapUnavailable({ onBack }: { readonly onBack: () => void }): ReactElement {
-  return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onBack}
-          style={({ pressed }) => [styles.backIcon, pressed ? styles.pressed : null]}
-        >
-          <Text style={styles.backIconText}>←</Text>
-        </Pressable>
-        <Text style={styles.title}>{UI_TEXT.mapPick.title}</Text>
-      </View>
-      <View style={styles.fallbackCard}>
-        <Text style={styles.fallbackTitle}>{UI_TEXT.mapPick.unavailableTitle}</Text>
-        <Text style={styles.fallbackBody}>{UI_TEXT.mapPick.unavailableBody}</Text>
-        <PrimaryButton label={UI_TEXT.mapPick.back} onPress={onBack} variant="secondary" />
       </View>
     </View>
   );
@@ -208,11 +141,6 @@ const styles = StyleSheet.create({
   },
   mapArea: {
     flex: 1,
-    borderRadius: RADIUS.md,
-    overflow: 'hidden',
-  },
-  map: {
-    flex: 1,
   },
   instructionBar: {
     position: 'absolute',
@@ -228,29 +156,30 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.body,
     color: COLORS.text,
   },
+  zoomControls: {
+    position: 'absolute',
+    right: SPACING.sm,
+    top: SPACING.xxl,
+    gap: SPACING.xs,
+  },
+  zoomButton: {
+    width: TAP_TARGET_MIN,
+    height: TAP_TARGET_MIN,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomText: {
+    fontSize: FONT_SIZE.heading,
+    color: COLORS.text,
+    fontWeight: '700',
+  },
   bottomBar: {
     gap: SPACING.sm,
   },
   selectedLabel: {
     fontSize: FONT_SIZE.bodyLarge,
-    color: COLORS.text,
-  },
-  fallbackCard: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: SPACING.md,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    padding: SPACING.lg,
-  },
-  fallbackTitle: {
-    fontSize: FONT_SIZE.title,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  fallbackBody: {
-    fontSize: FONT_SIZE.bodyLarge,
-    lineHeight: 24,
     color: COLORS.text,
   },
   pressed: {

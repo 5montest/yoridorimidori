@@ -6,3 +6,6 @@
  * （`@types/node` を追加しない方針のため、ここで最小限の型を宣言する）。
  */
 declare function require(id: string): unknown;
+
+/** React Native / Metro が提供する開発ビルド判定フラグ。 */
+declare const __DEV__: boolean;

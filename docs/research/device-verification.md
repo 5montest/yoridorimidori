@@ -227,3 +227,37 @@
 ### 未検証（要ユーザー操作・キー）
 - **Google マップの実共有テキスト**（非公式形式のため端末/バージョン依存）。座標入りテキスト・座標入り URL・geo: URI は動作確認済み。短縮リンク（maps.app.goo.gl）は**HTTP リダイレクト解決**を実装し単体テスト済み（実リンクでの確認は未実施）。
 - **API キーを設定したビルドでの地図表示**（GOOGLE_MAPS_API_KEY を環境変数に設定して再ビルドすれば有効化される）。
+
+---
+
+## V3 検証: Google マップ実共有・OSM 地図（2026-10-30 / 最終 APK 51.1MB）
+
+### 背景（ユーザー指摘）
+1. 実 Google マップから共有すると「短縮リンクは読み取れません」→ 共有フローを実機で再現して修正
+2. Google Maps は従量課金 → **OpenStreetMap タイル地図に置き換え**（API キー不要・課金なし）
+
+### 修正内容
+- 短縮リンク（maps.app.goo.gl）は **HTTP 取得 → 展開先 URL / HTML 本文から座標抽出**（RN の fetch は最終 URL を返さないため HTML 解析が必須）
+- 場所名は「共有タイトル（EXTRA_TITLE）→ 共有本文 → HTML の og:title」の順で採用（「Google Maps」等の汎用名は除外）
+- 地図は eact-native-maps（Google Maps）を削除し、**OSM ラスタータイル**（	ileMath 純粋関数 + OsmMapView）に置換
+
+### 実機検証（Google マップ実共有を含む）
+
+| # | 検証項目 | 結果 |
+|---|---|---|
+| 1 | **Google マップ → 共有シートに「寄鳥美鳥地」表示** | ✅ 実 URL https://maps.app.goo.gl/WCsJBbqQvS9wErts9 とともに表示 |
+| 2 | **共有 → 短縮リンク解決 → 確認シート** | ✅ 「共有された目的地」→「この場所を目的地にする」 |
+| 3 | **共有 → 目的地設定（場所名付き）** | ✅ **「ららぽーとTOKYO-BAY」13.14 km** として設定・再起動後も復元 |
+| 4 | **OSM 地図の表示** | ✅ タイル表示・「© OpenStreetMap contributors」帰属表示・拡大/縮小ボタン |
+| 5 | 地図タップ → 逆ジオコーディング → 確定 | ✅ 例: 「１８」884 m |
+| 6 | 場所検索 | ✅ 「1 件見つかりました / Tokyo」 |
+| 7 | ディープリンク（カスタムスキーム） | ✅ 確認シート → 「TokyoStation」12.80 km |
+| 8 | 初回起動オンボーディング / スキップ / 再起動で非表示 | ✅ |
+| 9 | クラッシュ / ANR | ✅ **0 件** |
+| 10 | 単体テスト・型検査 | ✅ **35 suites / 643 tests PASS**・	sc 0 |
+
+証跡: device-v3-onboarding-2026-10-30.png / device-v3-main-2026-10-30.png / device-v3-osm-map-2026-10-30.png / device-v3-share-chooser-2026-10-30.png / device-v3-share-sheet-2026-10-30.png / device-v3-share-confirmed-2026-10-30.png / device-v3-search-2026-10-30.png
+
+### 地図の課金について（結論）
+- **Google Maps は使用しない**ため、API キー・従量課金は不要。
+- OSM タイルは無料だが**利用ポリシー**あり（大量アクセス禁止・帰属表示必須・識別可能な User-Agent 推奨）。プロトタイプ規模では問題ないが、本番で利用が増える場合は **自前タイルサーバ / MapTiler / Stadia Maps 等の無料枠 / 商用プロバイダ** を検討する（[docs/research/destination-ux-apis.md](destination-ux-apis.md) に代替案を追記）。

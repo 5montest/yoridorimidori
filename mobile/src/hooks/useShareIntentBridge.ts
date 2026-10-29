@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+﻿import { useCallback, useMemo } from 'react';
 import Constants from 'expo-constants';
 
 /** 共有インテントで受け取った内容（必要な項目のみ）。 */
@@ -73,6 +73,10 @@ function useNativeShareIntent(hook: NativeUseShareIntent): ShareIntentBridge {
     const text = shareIntent.text ?? shareIntent.webUrl ?? null;
     if (text === null || text.trim().length === 0) {
       return null;
+    }
+    if (__DEV__) {
+      // 実機検証用: 共有元アプリが送ってきた内容を logcat で確認できるようにする。
+      console.log('[share-intent] received:', text);
     }
     return {
       text,

@@ -436,3 +436,20 @@
 | Android Activity | https://developer.android.com/reference/android/app/Activity | getIntent()/onNewIntent()、setIntentの注意 |
 | Android intents guide | https://developer.android.com/guide/components/intents-filters | intent-filter、ACTION_SEND |
 | SDK 58 bundled versions | https://unpkg.com/expo@58.0.21/bundledNativeModules.json | expo-location/clipboard/linking/webbrowser/intent-launcherの実バージョン |
+
+---
+
+## 8. 地図の代替案（課金回避・2026-10-30 追加）
+
+Google Maps SDK は API キーと従量課金（無料枠あり）が必要。本アプリは **OpenStreetMap のラスタータイル**を採用した（無料・キー不要）。
+
+| 方式 | コスト | キー | 備考 |
+|---|---|---|---|
+| **OSM ラスタータイル（採用）** | 無料 | 不要 | `tile.openstreetmap.org`。帰属表示必須・大量アクセス禁止。プロトタイプ〜小規模向け |
+| MapLibre GL + 無料タイル | 無料枠あり | 不要/キー | ベクター地図。`@maplibre/maplibre-react-native` は dev build 必須 |
+| MapTiler / Stadia Maps / Thunderforest | 無料枠あり（要登録） | 必要 | 商用利用可・SLA あり。タイル品質・制限が明確 |
+| 自前タイルサーバ（OSM データ + TileServer GL 等） | サーバ費用 | 不要 | 完全自前。運用コスト大 |
+| Google Maps | 従量課金（無料枠） | 必要 | 本アプリでは不採用（キー無しビルドでクラッシュするため） |
+
+- 本アプリの地図は「目的地選択の補助」用途のため、OSM ラスターで十分。
+- 利用が増えた場合は、上記の無料枠プロバイダへ切り替える（`osmTileUrl` の URL テンプレートを差し替えるだけで対応可能な設計）。

@@ -391,6 +391,8 @@
 | D-21 | **配布用 APK のローカルビルド**（2026-10-30） | サンドボックス解除後に再挑戦 | **決定/結果**: **成功**。`app-debug.apk` 54.7MB（arm64・JS バンドル同梱・debug 署名）を生成し実機インストール/起動確認。手順は [production-build.md](docs/research/production-build.md) §10.5。release ビルドは CMake ループで未解決のため、ストア配布は EAS Build（[deploy.md](docs/deploy.md)）を推奨 |
 | D-22 | **地図が APK で表示されない**（2026-10-30 ユーザー指摘） | Expo Go では動くが APK では `API key not found` でクラッシュ | **決定/結果**: カスタムビルドは Google Maps API キー必須。`app.config.js` が `GOOGLE_MAPS_API_KEY` を読み、キーがある場合のみ maps plugin を有効化。**キー無しビルドは地図画面をフォールバック表示**にしてクラッシュを解消（実機確認済み）。キー投入で地図有効化（[production-build.md](docs/research/production-build.md) §10.6） |
 | D-23 | **共有先アプリに出ない**（2026-10-30 ユーザー指摘） | `ACTION_SEND` の受信未実装（Expo Go では不可） | **決定/結果**: `expo-share-intent@9.0.0` + config plugin（`text/*`）で実装。**共有シートに「寄鳥美鳥地」が表示され、共有テキストから目的地を設定**できることを実機確認。短縮リンクは HTTP リダイレクトで解決（ユーザー操作起点の例外通信）。Expo Go では無効（APK / dev build のみ） |
+| D-24 | **Google マップ実共有で短縮リンクが読めない**（2026-10-30 ユーザー指摘） | RN の `fetch` は最終 URL を返さないため `response.url` での解決が失敗 | **決定/結果**: 短縮リンクは **HTTP 取得して展開先 URL・HTML 本文から座標を抽出**する方式に変更。場所名は「共有タイトル（EXTRA_TITLE）→ 共有本文 → HTML の og:title」の順で採用し汎用名（Google Maps 等）は除外。**実 Google マップ（Pixel 4a）からの共有 → 短縮リンク解決 → 「ららぽーとTOKYO-BAY」13.14km 設定**まで実機確認 |
+| D-25 | **Google Maps の従量課金を避けたい**（2026-10-30 ユーザー指摘） | Google Maps SDK は API キー＋課金・無料枠あり | **決定/結果**: **`react-native-maps`（Google Maps）を削除し、OpenStreetMap ラスタータイル地図に置き換え**（`domain/tileMath.ts` の純粋関数 + `ui/components/OsmMapView.tsx`）。API キー不要・課金なし。帰属表示（© OpenStreetMap contributors）を常時表示。OSM タイル利用ポリシー（大量アクセス禁止）に留意し、本番規模では自前タイルサーバ/商用プロバイダを検討（[destination-ux-apis.md](docs/research/destination-ux-apis.md)） |
 
 ---
 

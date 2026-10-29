@@ -2268,3 +2268,14 @@ readonly lastUsedAtEpochMs: number | null; // 最近使った順の基準。未�
 6. **`-0` / `NaN` / `Infinity`** をデータモデルに入れない。計算関数は `null` を返す（throw しない）。
 7. **文言は `ui/labels.ts`** にだけ書く。domain は区分コードのみ返す。
 8. 各タスク完了時に `npm run verify`（typecheck + test）を通し、**使用した外部 API の出典節**（library-api-notes の節番号）を PR/コミットメッセージに記載する（NFR-06）。
+
+---
+
+## 20. 地図レイヤの変更（2026-10-30）: OpenStreetMap タイル
+
+- **Google Maps（react-native-maps）を削除**し、OSM ラスタータイルの自前ビューに置き換えた（D-25）。
+- 追加:
+  - `domain/tileMath.ts` — Web メルカトル変換（`lonToTileXFloat` / `latToTileYFloat` / `tileXToLon` / `tileYToLat` / `worldPixelToGeo`）、表示タイル一覧（`visibleTiles`）、画面座標↔地理座標（`screenPointToGeo` / `geoToScreenPoint`）、`osmTileUrl`。**すべて純粋関数**で単体テスト済み。
+  - `ui/components/OsmMapView.tsx` — タイル `Image` の絶対配置・タップ選択・マーカー・帰属表示（© OpenStreetMap contributors）。UI 層のみ（hooks/adapters を import しない）。
+- `MapScreen` は `OsmMapView` を使用。ズームは UI 側で 10〜18 に制限。
+- 共有テキスト解決（`adapters/network/SharedTextResolver.ts`）は、短縮リンクを HTTP 取得し **展開先 URL / HTML 本文（`!3d!4d`・`@lat,lng`・`"latitude"/"longitude"`・`ll=` 等）から座標抽出**。場所名は「共有タイトル → 共有本文 → HTML og:title」の順（汎用名は除外）。

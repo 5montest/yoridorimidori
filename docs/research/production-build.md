@@ -482,3 +482,14 @@ cd android; .\gradlew.bat assembleDebug --no-daemon
 expo-share-intent@9.0.0 の config plugin を pp.config.js に追加済み（ndroidIntentFilters: ["text/*"]）。
 prebuild で ACTION_SEND / 	ext/* の intent-filter が AndroidManifest に追加され、共有シートにアプリが表示される。
 Expo Go では動作しない（APK / development build のみ）。
+
+---
+
+## 10.7 地図の変更（2026-10-30）: Google Maps → OpenStreetMap
+
+- Google Maps（`react-native-maps`）は **API キー必須・従量課金**のため削除した。
+- 代わりに **OSM ラスタータイル**（`https://tile.openstreetmap.org/{z}/{x}/{y}.png`）を `Image` で並べる自前実装に変更。
+  - `domain/tileMath.ts`: Web メルカトルの座標変換・タイル一覧・画面座標変換（純粋関数・単体テストあり）
+  - `ui/components/OsmMapView.tsx`: タイル描画・タップ選択・帰属表示
+- ビルド設定の変更は不要（API キー環境変数は不要になった）。
+- OSM タイル利用ポリシー: 大量アクセス禁止・帰属表示必須・識別可能な User-Agent 推奨。本番規模では自前タイルサーバ / MapTiler / Stadia Maps 等を検討。

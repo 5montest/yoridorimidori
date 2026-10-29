@@ -761,8 +761,9 @@ export const UI_TEXT = {
     confirm: 'この場所を目的地にする',
     webFallback: '地図はこのプラットフォームでは表示できません',
     webFallbackBody: 'Android / iOS の実機でご利用ください。',
-    unavailableTitle: '地図を表示できません',
-    unavailableBody:
-      'このビルドでは Google マップの API キーが設定されていないため、地図を表示できません。目的地選択画面の「場所を検索」「現在地」「最近使った場所」をご利用ください。',
+    tileError: '地図を読み込めません（通信状況を確認してください）',
+    attribution: '© OpenStreetMap contributors',
+    zoomIn: '拡大',
+    zoomOut: '縮小',
   },
 } as const;
