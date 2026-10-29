@@ -256,6 +256,22 @@ describe('computeNavState — navigating の派生値', () => {
     expect(state.headingAccuracyClass).toBe('unknown');
     expect(state.warnings).toContain('heading-low-accuracy');
   });
+
+  it('目的地が極点で目標方位を定義できない場合は navigating・相対方位 null（安全側）', () => {
+    // E-05 により極点は initialBearingDeg が null。距離は定義できるため navigating のままとし、
+    // 目標方位が無いので鳥はニュートラル（相対方位 null）にする。
+    const state = computeNavState(
+      makeInput({
+        destination: makeDestination({ latitude: 90, longitude: 0 }),
+        heading: makeHeading({ headingDeg: 0 }),
+      }),
+    );
+    expect(state.distanceM).not.toBeNull();
+    expect(state.distanceM as number).toBeGreaterThan(10);
+    expect(state.status).toBe('navigating');
+    expect(state.targetBearingDeg).toBeNull();
+    expect(state.relativeBearingDeg).toBeNull();
+  });
 });
 
 describe('computeNavState — E-08 方位不明', () => {

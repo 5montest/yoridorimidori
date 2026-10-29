@@ -58,6 +58,14 @@ describe('normalizeDegrees360 — [0, 360)', () => {
     expect(normalizeDegrees360(1080)).toBe(0);
   });
 
+  it('ごく小さな負値は 0 に正規化される（浮動小数で 360 になるケースを潰す）', () => {
+    // -1e-16 % 360 = -1e-16 → +360 すると浮動小数の丸めでちょうど 360 になるため、
+    // `r >= 360` の分岐で 0 に落とす（§6.2 参照実装）。
+    const result = normalizeDegrees360(-1e-16);
+    expect(result).toBe(0);
+    expect(Object.is(result, -0)).toBe(false);
+  });
+
   it('-0 は 0 に正規化される（Object.is で -0 でないことを確認）', () => {
     const result = normalizeDegrees360(-0);
     expect(result).toBe(0);
