@@ -432,3 +432,31 @@ Get-Process -Name java,cmake,ninja -ErrorAction SilentlyContinue |
   Where-Object { $_.Path -like "*$PWD*" } | Stop-Process -Force
 # 再実行時は §2 の env を設定し、4.4 を実行（このサンドボックスでは configureCMakeDebug で停止する）
 ```
+
+---
+
+## 10.5 再検証結果（2026-10-30 / Lead 実行・**成功**）
+
+| 項目 | 結果 |
+|---|---|
+| assembleDebug | **成功（4m45s / 293 tasks）**。当初の CMake/ninja ハングはサンドボックス解除（danger-full-access）で解消 |
+| APK | pp-debug.apk **54.7 MB**（arm64-v8a、ssets/index.android.bundle **1.48MB 同梱**） |
+| 実機インストール | db install -r 成功（Pixel 4a / Android 13） |
+| 起動 | 成功（Displayed jp.yoridorimidori.app/.MainActivity: +1s142ms）。S1 オンボーディング → S2 メイン画面 |
+| 成果物 | .cache/build/app-debug-standalone.apk |
+
+### 成功した手順（この環境固有の回避策）
+1. プロジェクトを **ジャンクション `C:\w` → `<workspace>\b`** 経由でビルド
+   （CMake はワークスペース外へ書込不可のため。junction で「短パス」と「ワークスペース内解決」を両立）
+2. `GRADLE_USER_HOME` を **短いジャンクション `C:\g` → `<workspace>\.gradle`** に
+   （react-android prefab ヘッダの 260 文字制限を回避）
+3. **`react-native-svg` を PNG 画像（`toucan.png`）に置換して依存から削除**
+   （new-arch codegen の C++ オブジェクトパスが 260 文字を超えるため）
+4. `app/build.gradle` に `debuggableVariants = []` を追加（debug でも JS バンドルを同梱 → 単体インストール可能）
+5. `reactNativeArchitectures=arm64-v8a`（APK サイズ・ビルド時間削減）
+6. `.cxx` を削除してクリーン再構成
+7. ビルド: `cd C:\w\app\android; .\gradlew.bat assembleDebug --no-daemon`
+
+### 残課題
+- **release ビルド**は `expo-modules-core` の CMake が "manifest still dirty after 100 tries" ループで失敗（RelWithDebInfo 構成）。
+  プロトタイプ配布は debug 署名版で可能。ストア配布は EAS Build を推奨。
