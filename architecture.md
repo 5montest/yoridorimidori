@@ -2293,3 +2293,9 @@ readonly lastUsedAtEpochMs: number | null; // 最近使った順の基準。未�
   - alpha バウンディングボックスでトリミング
   - 1024 角・高さ 88.5%・中央に正規化
 - 注意: **アセットのみ変更した場合は Gradle のバンドルタスクが再実行されない**ことがある。`android/app/build/generated/assets/react` を削除して再ビルドする（production-build.md §10.8）。
+
+### 更新（2026-10-30 その2）: 脚なし版へ差し替え
+
+- 回転時に脚が上に来る見た目を避けるため、**脚を描かない版**に差し替えた。
+- ソース: `docs/assets/toucan-source-v2-2026-10-30.png`。加工は同じ（白フリンジ除去・トリミング・1024角・高さ88.5%・中央）。
+- `mobile/assets/toucan.png` は 308KB。`Bird.tsx` は無変更。

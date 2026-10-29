@@ -381,3 +381,27 @@
 | 5 | 単体テスト・型検査 | ✅ 35 suites / 645 tests PASS・`tsc` 0 |
 
 証跡: `device-v7-toucan-onboarding-2026-10-30.png` / `device-v7-toucan-rotated-2026-10-30.png` / `toucan-preview-cream.png`
+
+---
+
+## V8 検証: オオハシ画像の脚なし版への差し替え（2026-10-30）
+
+### 背景
+回転時に脚が上に来るのを避けるため、ユーザーが**脚を描かない版**を生成。同じ加工で差し替えた。
+
+### 加工内容
+- 生成画像（1254×1254 / RGBA / 背景透過）→ 白背景アンマット（半透明 9,276 画素）→ トリミング（718×1176）→ **1024×1024・高さ88.5%・中央**に正規化
+- `mobile/assets/toucan.png`（308KB）を更新。ソースは `docs/assets/toucan-source-v2-2026-10-30.png`
+- ビルド時はバンドル成果物（`build/generated/assets/react`）を削除して再ビルド（§10.8）。APK 内 `assets_toucan.png` が 308,032 B であることを確認
+
+### 実機検証（Pixel 4a）
+
+| # | 検証項目 | 結果 |
+|---|---|---|
+| 1 | オンボーディング（0°上向き） | ✅ 脚なしの新オオハシが正立表示 |
+| 2 | メイン画面（右ななめ後ろ ≈135°） | ✅ クチバシが右下を向き、方向と一致 |
+| 3 | 透過・白フリンジ | ✅ クリーム背景でハローなし |
+| 4 | クラッシュ / ANR | ✅ 0 件 |
+| 5 | 単体テスト・型検査 | ✅ 35 suites / 645 tests PASS・`tsc` 0 |
+
+証跡: `device-v8-toucan-onboarding-2026-10-30.png` / `device-v8-toucan-rotated-2026-10-30.png` / `toucan-preview-cream.png`
