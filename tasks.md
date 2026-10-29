@@ -74,6 +74,8 @@
 
 ### 1.1 実装タスク（T01〜T28）
 
+> **architecture §17 の P との対応**: P0→T01 / P1→T02 / P2→T04・T05 / P3→T06 / P4→T07・T08 / P5→T03（前倒し）・T09・T10 / P6→T11・T12・T13 / P7→T14・T15 / P8→T16・T17・T18 / P9→T19・T20 / P10→T21・T22（＋T25 の App 部分） / P11→T23・T24 / P12→T26・T27 / P13→T28。
+
 | ID | 名称 | 依存 | 規模 | 完了条件（要約） | 対応要件 |
 |---|---|---|---|---|---|
 | T01 | 基盤セットアップ（types / constants / ports） | — | 中 | `typecheck` 0。constants テスト PASS | §3.2, §4, §6.1 / FR-12 / NFR-05 |
@@ -1106,7 +1108,7 @@ npx expo export --platform android --max-workers 1 --no-bytecode
 **実装内容の要点**（§9.7 / §8.3 / ADR-08）
 - サンプル一覧: 直近 20 件を表形式で表示（時刻 HH:MM:SS、緯度、経度、GPS 精度、方位、方位精度、位置経過、方位経過）
 - 簡易集計: `summarizeSamples`（T10）の結果（平均 GPS 精度＋件数、方位精度の分布、古いサンプル率）を表示
-- `MockControlPanel`: 手動入力（緯度・経度・GPS 精度・方位・方位精度・方位基準、**`TextInput` + 増減ボタン**。スライダーは追加依存のため使わない＝ADR-08/付録A-2）、シナリオ選択（ラジオ風ボタン）、`Mock ON/OFF`、時間加速 `×1/×2/×5/×10`
+- `MockControlPanel`: 手動入力（緯度・経度・GPS 精度・方位・方位精度・方位基準、**`TextInput` + 増減ボタン**。スライダーは追加依存のため使わない＝ADR-08/付録A-2）、シナリオ選択（ラジオボタン風のボタン群）、`Mock ON/OFF`、時間加速 `×1/×2/×5/×10`
 - `MockSensorController` は **props で受け取る**（`useNavApp` は Mock コントローラを知らない＝§7.4）。操作は `setMode` / `setManualLocation` / `setManualHeading` / `selectScenario` / `setTimeScale`
 - 表示は `devToolsVisible`（T25 の `App.tsx` が `__DEV__` から決定）のときのみ。リリースビルドでは操作 UI を出さない（コードは同梱）
 - 保存警告・直近エラー（`storageWarnings` / `errors`）も表示する（§11.3 #11, #12）
@@ -1250,7 +1252,7 @@ npx expo export --platform android --max-workers 1 --no-bytecode
    - `react-native-maps` の import が `MapScreen.tsx` 以外 → 0 件
    - `Date.now()` が `mobile/src/domain/` → 0 件（鮮度は Clock 経由）
 5. §7 の §18 チェック表を「解消 / 代替で回避 / D タスクへ移動」で埋める
-6. 受け入れ基準 §8-1〜8-8 の最終確認表（§6.4 後述）を D タスク結果で埋める
+6. 受け入れ基準 §8-1〜8-8 の最終確認表（§6.4）を D タスク結果で埋める
 
 **受け入れ基準**
 - [ ] `npm run verify` が緑
@@ -1603,7 +1605,7 @@ adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
 | 12 | カバレッジ不足（domain 100% 目標） | 品質目標未達 | T28 で `--coverage` を確認し、不足分は該当タスクへ戻って追加 | T28 |
 | 13 | 実機の接続状態の変化（`adb devices` 空） | D タスクが開始できない | D1 の前提確認。未接続なら D タスクを保留し、実装タスク（M1/M2）を先行 | D1 開始時 |
 | 14 | Expo Go の版ずれ（SDK 57/58 移行期） | 実機で起動できない | `expo.dev/go` の SDK 58 版（58.0.5）を使用（D1） | D1 |
-| 15 | UI の目視確認が PC でできない（Web 依存なし） | 表示崩れの見逃し | UI は道具としてのテスト対象外と明示（§12.6）。目視は D タスク（D1/D2/D3/D6）で担保 | D タスク |
+| 15 | UI の目視確認が PC でできない（Web 依存なし） | 表示崩れの見逃し | UI はレンダリングテストの対象外と明示（§12.6）。目視は D タスク（D1/D2/D3/D6）で担保 | D タスク |
 
 ---
 
@@ -1613,7 +1615,7 @@ adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
 
 | # | 確認事項 | 本書の既定 | 判断が必要な理由 |
 |---|---|---|---|
-| 1 | **Web プレビュー用依存 3 点**（`react-dom` / `react-native-web` / `@expo/metro-runtime`）を追加するか（§付録A-1 / §18-14 / acceptance 3） | **追加しない**。FR-10 の PC 再現は Jest（T11〜T13）で担保し、全画面の目視は実機 D タスクで行う | 追加するとサンドボックスでの `npm install --ignore-scripts` と Metro 設定の検証が増える。受け入れ基準 3 の「Expo web **または** Jest」の解釈を確定したい |
+| 1 | **Web プレビュー用依存 3 点**（`react-dom` / `react-native-web` / `@expo/metro-runtime`）を追加するか（§付録A-1 / §18-14 / 受け入れ基準 3） | **追加しない**。FR-10 の PC 再現は Jest（T11〜T13）で担保し、全画面の目視は実機 D タスクで行う | 追加するとサンドボックスでの `npm install --ignore-scripts` と Metro 設定の検証が増える。受け入れ基準 3 の「Expo web **または** Jest」の解釈を確定したい |
 | 2 | requirements §6 の E-07 / E-10 / E-13 の文言（architecture §15.2 の提案反映済み）で確定してよいか | **確定**（`359.999` は 2 値併記、E-10 は 30 秒超、E-13 は `999.6 → '1000 m'`）。テストはこの値で固定 | §15.2 の「要確認」が requirements 側で更新済みか最終確認したい（実装中の手戻り防止） |
 | 3 | `summarizeSamples(entries, thresholds)` の引数追加（0.3-7） | **採用**（古いサンプル率の閾値に `Thresholds` が必要） | §9.7 の表記（引数なし）との差を明示的に承認したい |
 | 4 | `validateDestinationInput` の戻り値（`origin` を呼び出し側で付与。T03） | **採用**（§6.11 の注記を優先） | §6.11 のシグネチャ（`ValidationResult<DestinationInput>`）と `origin` の責務が矛盾して見えるため |

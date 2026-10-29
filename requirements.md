@@ -306,6 +306,10 @@
 | D-11 | 保存方式 | — | **決定**: `@react-native-async-storage/async-storage` **2.2.0**（SDK 58 ピン。npm latest 3.1.1 は使わない）。記録量が増える場合は `expo-sqlite ~58.0.14`（kv-store）へ |
 | D-12 | UI 言語 | — | **決定**: 日本語（コード内の識別子・コメントは英語/日本語混在可、ドキュメントは日本語） |
 | D-13 | Expo Go の版 | 移行期（`expoGoSdkVersion=57.0.0` だが SDK 58 版 APK は配布済み） | **決定**: 実機では `expo.dev/go` から **SDK 58 版 Expo Go** を導入する |
+| D-14 | Web プレビュー用依存（`react-dom` / `react-native-web` / `@expo/metro-runtime`） | 未導入。実機（Pixel 4a）が接続済み | **決定（2026-10-30）**: **追加しない**。PC 再現は Jest、画面の目視は実機タスク（D1〜D7）で担保する |
+| D-15 | 境界値の確定（E-07 / E-10 / E-13 / FR-06） | architecture §15.2 の指摘 | **決定**: §6 の文言を修正済み（`359.999` は 2 値併記、E-10 は「30 秒超」、E-13 は `999.6 → '1000 m'`、FR-06 は `distance < 10` strict） |
+| D-16 | `summarizeSamples` の引数 | tasks.md §8-3 | **決定**: `summarizeSamples(entries, thresholds)` を採用（古いサンプル率の閾値に `Thresholds` が必要） |
+| D-17 | `validateDestinationInput` の `origin` 付与 | tasks.md §8-4 | **決定**: `origin` は呼び出し側で付与（validation は入力検証に専念） |
 
 ---
 
