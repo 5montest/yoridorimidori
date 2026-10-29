@@ -1,9 +1,12 @@
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { StatusBar as NativeStatusBar, StyleSheet, View } from 'react-native';
 import { SystemClock } from './src/adapters/clock/SystemClock';
+import { ExpoClipboardProvider } from './src/adapters/expo/ExpoClipboardProvider';
 import { ExpoHeadingProvider } from './src/adapters/expo/ExpoHeadingProvider';
+import { ExpoLinkingProvider } from './src/adapters/expo/ExpoLinkingProvider';
 import { ExpoLocationProvider } from './src/adapters/expo/ExpoLocationProvider';
+import { ExpoPlaceSearchProvider } from './src/adapters/expo/ExpoPlaceSearchProvider';
 import { MockHeadingProvider } from './src/adapters/mock/MockHeadingProvider';
 import { MockLocationProvider } from './src/adapters/mock/MockLocationProvider';
 import { MockSensorControllerImpl } from './src/adapters/mock/MockSensorControllerImpl';
@@ -12,18 +15,30 @@ import { AsyncStorageDestinationRepository } from './src/adapters/storage/AsyncS
 import { AsyncStorageSampleLogRepository } from './src/adapters/storage/AsyncStorageSampleLogRepository';
 import { DEFAULT_THRESHOLDS } from './src/domain/constants';
 import { filterFavorites, recentDestinations } from './src/domain/destinationOrder';
-import type { GeoPoint } from './src/domain/types';
+import type { DestinationInput } from './src/domain/types';
+import { useDestinationPicker } from './src/hooks/useDestinationPicker';
 import { selectSelectedDestination } from './src/hooks/selectors';
 import { useNavApp, type NavAppDeps } from './src/hooks/useNavApp';
+import type { ClipboardProvider } from './src/ports/clipboard';
+import type { DeepLinkProvider } from './src/ports/deepLink';
 import type { MockSensorController } from './src/ports/mockSensor';
+import type { PlaceSearchProvider } from './src/ports/placeSearch';
+import type { PreferencesRepository } from './src/ports/preferences';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { ScreenSwitcher } from './src/ui/components/ScreenSwitcher';
-import { UI_TEXT, type ScreenId, type SearchStatus } from './src/ui/labels';
+import { SharedDestinationSheet } from './src/ui/components/SharedDestinationSheet';
+import {
+  UI_TEXT,
+  type ScreenId,
+  type SearchStatus,
+  type ShareLinkState,
+} from './src/ui/labels';
 import { DestinationAddScreen } from './src/ui/screens/DestinationAddScreen';
 import { DestinationPickerScreen } from './src/ui/screens/DestinationPickerScreen';
 import { DevLogScreen } from './src/ui/screens/DevLogScreen';
 import { MainScreen } from './src/ui/screens/MainScreen';
 import { MapScreen } from './src/ui/screens/MapScreen';
+import { OnboardingScreen } from './src/ui/screens/OnboardingScreen';
 import { SearchResultsScreen } from './src/ui/screens/SearchResultsScreen';
 import { COLORS, statusBarTopInset } from './src/ui/theme';
 
@@ -48,13 +63,24 @@ function createDestinationIdFactory(): () => string {
 interface AppRuntime {
   readonly deps: NavAppDeps;
   readonly controller: MockSensorController;
+  /** 目的地設定 UX（U03 アダプタ）。 */
+  readonly placeSearch: PlaceSearchProvider;
+  readonly clipboard: ClipboardProvider;
+  readonly deepLink: DeepLinkProvider;
+  /**
+   * オンボーディング表示履歴（U03 アダプタ追加後に注入）。
+   * `null` の間はオンボーディングをスキップする（表示制御は App の責務）。
+   */
+  readonly preferences: PreferencesRepository | null;
 }
 
 /**
  * 具象実装を生成する（**この関数が唯一の生成場所**）。
  *
  * - 実センサー（Expo）と Mock プロバイダの両方を生成し、`useNavApp` にポートとして注入する。
- * - Mock コントローラは開発画面へ直接渡す（`useNavApp` には渡さない＝§7.4）。
+ * - 目的地設定用の検索・クリップボード・ディープリンクもここで生成して
+ *   `useDestinationPicker` に注入する（`ui/` は具体型を知らない）。
+ * - Mock コントローラは開発メニューへ直接渡す（`useNavApp` には渡さない＝§7.4）。
  */
 function createRuntime(): AppRuntime {
   const clock = new SystemClock();
@@ -71,6 +97,10 @@ function createRuntime(): AppRuntime {
   );
   const sampleLogRepository = new AsyncStorageSampleLogRepository(clock);
 
+  const placeSearch = new ExpoPlaceSearchProvider({ clock });
+  const clipboard = new ExpoClipboardProvider({ clock });
+  const deepLink = new ExpoLinkingProvider({ clock });
+
   const deps: NavAppDeps = {
     clock,
     locationProvider,
@@ -83,26 +113,65 @@ function createRuntime(): AppRuntime {
     devToolsVisible: __DEV__,
   };
 
-  return { deps, controller };
+  return {
+    deps,
+    controller,
+    placeSearch,
+    clipboard,
+    deepLink,
+    preferences: null,
+  };
+}
+
+/** `useDestinationPicker` の検索状態 → UI の表示状態。`pending`（debounce 待ち）は loading。 */
+function toUiSearchStatus(status: string): SearchStatus {
+  switch (status) {
+    case 'loading':
+    case 'pending':
+      return 'loading';
+    case 'success':
+      return 'success';
+    case 'empty':
+      return 'empty';
+    case 'error':
+      return 'error';
+    default:
+      return 'idle';
+  }
+}
+
+interface ShareStateInput {
+  readonly clipboardStatus: 'idle' | 'checking' | 'none';
+  readonly pendingSource: 'clipboard' | 'deep-link' | null;
+  readonly bannerKind: 'ready' | 'needs-resolution' | null;
+}
+
+/** クリップボード取り込みの状態 → S3 の表示状態。 */
+function toShareLinkState(input: ShareStateInput): ShareLinkState {
+  if (input.clipboardStatus === 'checking') {
+    return 'reading';
+  }
+  if (input.pendingSource === 'clipboard') {
+    return input.bannerKind === 'needs-resolution' ? 'needs-resolution' : 'ready';
+  }
+  if (input.clipboardStatus === 'none') {
+    return 'no-url';
+  }
+  return 'idle';
 }
 
 /**
- * アプリのコンポジションルート。§2.4 / §7.5 / §11.2 / T25。
+ * アプリのコンポジションルート。§2.4 / §7.5 / §11.2 / U13。
  *
- * - 責務は**生成と注入だけ**。具体実装（Clock・リポジトリ・実/Mock プロバイダ）を生成して
- *   `useNavApp` に注入し、画面へ props を渡す。計算・判定ロジックは書かない。
+ * - 責務は**生成と注入だけ**。具体実装を生成して `useNavApp` / `useDestinationPicker` に注入し、
+ *   画面へ props を渡す。計算・判定ロジックは書かない。
  * - 画面遷移は `useState<ScreenId>`（ADR-07。`react-navigation` は使わない）。
- * - 権限拒否の案内はメイン画面のステータス領域に常設する（§11.2）。
- * - 開発画面への導線・Mock 切替は `__DEV__`（`devToolsVisible`）のときだけ出す（§9.7）。
+ * - 開発メニュー（S7）はタイトル長押しの隠し導線（UX-6）。座標入力はそこからのみ到達する。
  */
 export default function App(): ReactElement {
   const [screen, setScreen] = useState<ScreenId>('main');
-  /** 地図で選んだ地点（S4）。場所名は U05（逆ジオコーディング）配線後に埋まる。 */
-  const [mapPickPoint, setMapPickPoint] = useState<GeoPoint | null>(null);
-  const [mapPickLabel, setMapPickLabel] = useState<string | null>(null);
-  /** 検索バーと検索結果の状態（U05 接続までは骨格）。 */
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [onboardingVisible, setOnboardingVisible] = useState(false);
   const runtime = useMemo(createRuntime, []);
   const { state, nav, actions } = useNavApp(runtime.deps);
   const selectedDestination = selectSelectedDestination(state);
@@ -110,25 +179,111 @@ export default function App(): ReactElement {
   // ステータスバー（時刻・バッテリー）との重なりを避ける。safe-area-context は追加しない。
   const statusBarPaddingTop = statusBarTopInset(NativeStatusBar.currentHeight);
 
+  // 目的地選択（S3〜S5）のオーケストレーション（検索/クリップボード/ディープリンク/地図）。
+  const recent = useMemo(() => recentDestinations(state.destinations), [state.destinations]);
+  const favorites = useMemo(() => filterFavorites(state.destinations), [state.destinations]);
+
+  const confirmDestination = useCallback(
+    (input: DestinationInput) => {
+      void (async () => {
+        const saved = await actions.addDestination(input, { select: true });
+        if (saved) {
+          setScreen('main');
+        }
+      })();
+    },
+    [actions],
+  );
+
+  const toggleFavoriteById = useCallback(
+    (id: string) => {
+      const target = state.destinations.find((destination) => destination.id === id);
+      if (target !== undefined) {
+        void actions.setFavorite(id, !target.favorite);
+      }
+    },
+    [actions, state.destinations],
+  );
+
+  const picker = useDestinationPicker({
+    placeSearch: runtime.placeSearch,
+    clipboard: runtime.clipboard,
+    deepLink: runtime.deepLink,
+    recent,
+    favorites,
+    currentPoint: state.location?.point ?? null,
+    fallbackName: UI_TEXT.destinationPicker.fallbackName,
+    onConfirm: confirmDestination,
+    onToggleFavorite: toggleFavoriteById,
+  });
+
+  // 初回起動のオンボーディング（S1）。表示済みフラグは PreferencesRepository（U03 アダプタ待ち）。
+  useEffect(() => {
+    const preferences = runtime.preferences;
+    if (preferences === null) {
+      setOnboardingChecked(true);
+      return undefined;
+    }
+    let disposed = false;
+    void preferences
+      .getOnboardingSeen()
+      .then((seen) => {
+        if (!disposed) {
+          setOnboardingVisible(!seen);
+          setOnboardingChecked(true);
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          setOnboardingVisible(false);
+          setOnboardingChecked(true);
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [runtime.preferences]);
+
+  const finishOnboarding = useCallback((): void => {
+    setOnboardingVisible(false);
+    const preferences = runtime.preferences;
+    if (preferences !== null) {
+      void preferences.setOnboardingSeen(true).catch(() => undefined);
+    }
+  }, [runtime.preferences]);
+
+  const resetOnboarding = useMemo<(() => void) | undefined>(() => {
+    const preferences = runtime.preferences;
+    if (preferences === null) {
+      return undefined;
+    }
+    return () => {
+      void preferences.setOnboardingSeen(false).catch(() => undefined);
+      setOnboardingVisible(true);
+      setScreen('main');
+    };
+  }, [runtime.preferences]);
+
   // Mock モードの間だけ Mock センサーの時計を進める（開発ビルドのみ有効）。
   useEffect(() => {
     if (!state.mockMode) {
-      return;
+      return undefined;
     }
     return startMockTicker(runtime.controller, MOCK_TICKER_INTERVAL_MS);
   }, [state.mockMode, runtime.controller]);
 
   let content: ReactElement;
   if (screen === 'destinations') {
+    const shareLinkState = toShareLinkState({
+      clipboardStatus: picker.state.clipboardStatus,
+      pendingSource: picker.state.pendingShared?.source ?? null,
+      bannerKind: picker.derived.sharedBannerKind,
+    });
     content = (
       <DestinationPickerScreen
-        searchQuery={searchQuery}
-        onChangeSearchQuery={setSearchQuery}
-        onSubmitSearch={() => {
-          if (searchQuery.trim().length === 0) {
-            return;
-          }
-          setSearchStatus('idle');
+        searchQuery={picker.state.query}
+        onSubmitSearch={(query) => {
+          picker.actions.setQuery(query);
           setScreen('search');
         }}
         currentLocationAvailable={
@@ -144,15 +299,14 @@ export default function App(): ReactElement {
           })();
         }}
         onOpenMapPick={() => {
-          setMapPickPoint(null);
-          setMapPickLabel(null);
+          picker.actions.clearMapPoint();
           setScreen('map');
         }}
-        recent={recentDestinations(state.destinations).map((destination) => ({
+        recent={recent.map((destination) => ({
           id: destination.id,
           name: destination.name,
         }))}
-        favorites={filterFavorites(state.destinations).map((destination) => ({
+        favorites={favorites.map((destination) => ({
           id: destination.id,
           name: destination.name,
         }))}
@@ -164,25 +318,35 @@ export default function App(): ReactElement {
           actions.selectDestination(id);
           setScreen('main');
         }}
-        shareLinkState="idle"
-        onImportShareLink={() => undefined}
-        shareLinkEnabled={false}
+        shareLinkState={shareLinkState}
+        onImportShareLink={() => {
+          void picker.actions.checkClipboard();
+        }}
+        onConfirmShared={picker.actions.confirmShared}
+        onDismissShared={picker.actions.dismissShared}
         onBack={() => setScreen('main')}
       />
     );
   } else if (screen === 'search') {
-    // U05（useDestinationPicker）接続までは骨格: 検索状態の表示と「地図から選ぶ」導線のみ。
     content = (
       <SearchResultsScreen
-        query={searchQuery}
-        status={searchStatus}
-        results={[]}
+        query={picker.state.query}
+        status={toUiSearchStatus(picker.state.searchStatus)}
+        results={picker.state.results.map((candidate) => ({
+          id: candidate.id,
+          name: candidate.name,
+          address: candidate.address,
+        }))}
         errorMessage={null}
-        onSelect={() => undefined}
-        onRetry={() => undefined}
+        onSelect={(id) => {
+          const candidate = picker.state.results.find((item) => item.id === id);
+          if (candidate !== undefined) {
+            picker.actions.selectSearchResult(candidate);
+          }
+        }}
+        onRetry={() => picker.actions.retrySearch()}
         onOpenMapPick={() => {
-          setMapPickPoint(null);
-          setMapPickLabel(null);
+          picker.actions.clearMapPoint();
           setScreen('map');
         }}
         onUseCurrentLocation={() => {
@@ -237,6 +401,7 @@ export default function App(): ReactElement {
         onToggleMock={() => actions.toggleMockMode()}
         onSelectScenario={(id) => actions.selectScenario(id)}
         onOpenCoordinateSetting={() => setScreen('add')}
+        onResetOnboarding={resetOnboarding}
         onBack={() => setScreen('main')}
       />
     );
@@ -245,31 +410,17 @@ export default function App(): ReactElement {
       <ErrorBoundary onReturnToMain={() => setScreen('destinations')}>
         <MapScreen
           initialPoint={state.location?.point ?? null}
-          selectedPoint={mapPickPoint}
-          selectedLabel={mapPickLabel}
-          resolving={false}
-          onPick={(point) => {
-            setMapPickPoint(point);
-            setMapPickLabel(null);
+          selectedPoint={picker.state.mapPoint}
+          selectedLabel={
+            picker.state.mapCandidate === null ? null : picker.state.mapCandidate.name
+          }
+          resolving={picker.state.mapStatus === 'resolving'}
+          onPick={picker.actions.selectMapPoint}
+          onConfirm={picker.actions.confirmMapPoint}
+          onBack={() => {
+            picker.actions.clearMapPoint();
+            setScreen('destinations');
           }}
-          onConfirm={() => {
-            if (mapPickPoint === null) {
-              return;
-            }
-            void (async () => {
-              const saved = await actions.addDestination({
-                name: mapPickLabel ?? UI_TEXT.mapPick.defaultDestinationName,
-                point: mapPickPoint,
-                origin: 'manual',
-              });
-              if (saved) {
-                setMapPickPoint(null);
-                setMapPickLabel(null);
-                setScreen('main');
-              }
-            })();
-          }}
-          onBack={() => setScreen('destinations')}
         />
       </ErrorBoundary>
     );
@@ -301,12 +452,41 @@ export default function App(): ReactElement {
     );
   }
 
+  if (!onboardingChecked) {
+    return (
+      <View style={[styles.root, { paddingTop: statusBarPaddingTop }]}>
+        <ExpoStatusBar style="dark" />
+      </View>
+    );
+  }
+
+  if (onboardingVisible) {
+    return (
+      <View style={[styles.root, { paddingTop: statusBarPaddingTop }]}>
+        <ExpoStatusBar style="dark" />
+        <OnboardingScreen onComplete={finishOnboarding} onSkip={finishOnboarding} />
+      </View>
+    );
+  }
+
+  const pendingShared = picker.state.pendingShared;
+  const deepLinkReady =
+    pendingShared !== null &&
+    pendingShared.source === 'deep-link' &&
+    picker.derived.sharedBannerKind === 'ready';
+
   return (
     <View style={[styles.root, { paddingTop: statusBarPaddingTop }]}>
       <ExpoStatusBar style="dark" />
       <ScreenSwitcher screen={screen} onChange={setScreen}>
         {content}
       </ScreenSwitcher>
+      <SharedDestinationSheet
+        visible={pendingShared !== null && pendingShared.source === 'deep-link'}
+        kind={deepLinkReady ? 'ready' : 'needs-resolution'}
+        onConfirm={picker.actions.confirmShared}
+        onDismiss={picker.actions.dismissShared}
+      />
     </View>
   );
 }

@@ -358,10 +358,11 @@ export function searchStatusMessageLabel(status: SearchStatus): string {
 export type ShareLinkState =
   | 'idle'
   | 'reading'
+  | 'ready'
   | 'no-url'
   | 'invalid'
   | 'success'
-  | 'network-required';
+  | 'needs-resolution';
 
 /** 共有リンク取り込みの案内文。 */
 export function shareLinkMessageLabel(state: ShareLinkState): string {
@@ -370,13 +371,15 @@ export function shareLinkMessageLabel(state: ShareLinkState): string {
       return '';
     case 'reading':
       return 'リンクを読み取っています…';
+    case 'ready':
+      return 'コピーしたリンクから目的地を読み取りました。この場所を目的地にできます。';
     case 'no-url':
       return 'クリップボードにリンクがありません。Google マップなどで「リンクをコピー」してからお試しください。';
     case 'invalid':
       return 'リンクから場所を読み取れませんでした。座標を含むリンクをコピーし直してください。';
     case 'success':
       return 'コピーしたリンクから目的地を設定しました';
-    case 'network-required':
+    case 'needs-resolution':
       return '短縮リンクは読み取れません。Google マップで「リンクをコピー」し直してください。';
   }
 }
@@ -717,6 +720,17 @@ export const UI_TEXT = {
     otherMethodsTitle: 'その他の方法',
     clipboardButton: 'コピーしたリンクから設定',
     clipboardHint: 'Google マップの「リンクをコピー」などで共有できます',
+    shareConfirm: 'この場所を目的地にする',
+    shareDismiss: '閉じる',
+    /** 場所名が取得できないときの既定の目的地名（地図・逆ジオコーディング用）。 */
+    fallbackName: '選択した地点',
+  },
+  /** 共有リンク（クリップボード / ディープリンク）の確認シート */
+  sharedDestination: {
+    title: '共有された目的地',
+    confirm: 'この場所を目的地にする',
+    dismiss: 'あとで',
+    readAgain: '別のリンクを読む',
   },
   /** 検索結果（S5）*/
   searchResults: {

@@ -46,8 +46,11 @@ export interface NavAppDeps {
 /** 画面が呼び出す操作。表示ロジック・計算は持たない（状態と永続化の仲介のみ）。 */
 export interface NavAppActions {
   selectDestination(id: string | null): void;
-  /** 追加。検証エラー・保存失敗は `false`（UI は失敗表示）。 */
-  addDestination(input: DestinationInput): Promise<boolean>;
+  /** 追加。検証エラー・保存失敗は `false`（UI は失敗表示）。`select: true` で追加後に選択する。 */
+  addDestination(
+    input: DestinationInput,
+    options?: { readonly select?: boolean },
+  ): Promise<boolean>;
   updateDestination(id: string, input: DestinationInput): Promise<boolean>;
   removeDestination(id: string): Promise<void>;
   /** 位置が未取得/途絶なら `false`（UI はボタンを無効化して理由表示）。 */
@@ -480,11 +483,19 @@ export function useNavApp(deps: NavAppDeps): NavApp {
           origin: input.origin,
         });
         if (mountedRef.current) {
+          const usedAtEpochMs = clock.nowEpochMs();
           dispatch({
             type: 'destination/added',
-            destination: created,
+            destination: select ? { ...created, lastUsedAtEpochMs: usedAtEpochMs } : created,
             select,
           });
+          if (select) {
+            // 「最近使った場所」用（失敗しても保存自体は成功しているので警告のみ）。
+            void destinationRepository.markUsed(created.id).catch(() => {
+              dispatchStorageWarning('最近使った場所の記録に失敗しました');
+            });
+            persistSelection(created.id);
+          }
         }
         return true;
       } catch {
@@ -492,7 +503,7 @@ export function useNavApp(deps: NavAppDeps): NavApp {
         return false;
       }
     },
-    [destinationRepository, dispatchStorageWarning],
+    [clock, destinationRepository, dispatchStorageWarning, persistSelection],
   );
 
   const actions = useMemo<NavAppActions>(
@@ -515,8 +526,12 @@ export function useNavApp(deps: NavAppDeps): NavApp {
         }
       },
 
-      addDestination(input: DestinationInput): Promise<boolean> {
-        const shouldSelect = stateRef.current.selectedDestinationId === null;
+      addDestination(
+        input: DestinationInput,
+        options?: { readonly select?: boolean },
+      ): Promise<boolean> {
+        const shouldSelect =
+          options?.select === true || stateRef.current.selectedDestinationId === null;
         return performAdd(input, shouldSelect);
       },
 

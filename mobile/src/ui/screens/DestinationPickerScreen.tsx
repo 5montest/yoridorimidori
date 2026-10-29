@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   UI_TEXT,
@@ -15,11 +15,10 @@ export interface PickerPlace {
 }
 
 export interface DestinationPickerScreenProps {
-  /** 検索バーの入力値（App が保持）。 */
+  /** 検索バーの現在値（S5 から戻ったとき入力値を復元する）。 */
   readonly searchQuery: string;
-  readonly onChangeSearchQuery: (query: string) => void;
-  /** 「検索」ボタン/Enter で S5（検索結果）へ。 */
-  readonly onSubmitSearch: () => void;
+  /** 「検索」ボタン/Enter で確定した検索語を渡す（S5 へ）。 */
+  readonly onSubmitSearch: (query: string) => void;
   /** 現在地が使えるか（位置なし・途絶なら false）。 */
   readonly currentLocationAvailable: boolean;
   /** 位置が「途絶」しているか（無効理由の文言の出し分け）。 */
@@ -34,6 +33,9 @@ export interface DestinationPickerScreenProps {
   /** 共有リンク取り込みの状態（タップ時のみクリップボードを読む）。 */
   readonly shareLinkState: ShareLinkState;
   readonly onImportShareLink: () => void;
+  /** 「この場所を目的地にする」（`shareLinkState === 'ready'` のときのみ）。 */
+  readonly onConfirmShared?: () => void;
+  readonly onDismissShared?: () => void;
   /** 共有リンク導線を出すか（U03/U05 配線前は false にして未実装ボタンを見せない）。 */
   readonly shareLinkEnabled?: boolean;
   readonly onBack: () => void;
@@ -49,7 +51,6 @@ export interface DestinationPickerScreenProps {
  */
 export function DestinationPickerScreen({
   searchQuery,
-  onChangeSearchQuery,
   onSubmitSearch,
   currentLocationAvailable,
   currentLocationLost,
@@ -61,15 +62,25 @@ export function DestinationPickerScreen({
   onSelectFavorite,
   shareLinkState,
   onImportShareLink,
+  onConfirmShared,
+  onDismissShared,
   shareLinkEnabled = true,
   onBack,
 }: DestinationPickerScreenProps): ReactElement {
+  const [searchText, setSearchText] = useState(searchQuery);
   const shareLinkMessage = shareLinkMessageLabel(shareLinkState);
   const locationReason = currentLocationLost
     ? UI_TEXT.destinationPicker.currentLocationLost
     : currentLocationAvailable
       ? null
       : UI_TEXT.destinationPicker.currentLocationUnavailable;
+  const submitSearch = (): void => {
+    const trimmed = searchText.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+    onSubmitSearch(trimmed);
+  };
 
   return (
     <View style={styles.screen}>
@@ -87,9 +98,9 @@ export function DestinationPickerScreen({
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.searchRow}>
           <TextInput
-            value={searchQuery}
-            onChangeText={onChangeSearchQuery}
-            onSubmitEditing={onSubmitSearch}
+            value={searchText}
+            onChangeText={setSearchText}
+            onSubmitEditing={submitSearch}
             placeholder={UI_TEXT.destinationPicker.searchPlaceholder}
             placeholderTextColor={COLORS.textMuted}
             returnKeyType="search"
@@ -98,7 +109,7 @@ export function DestinationPickerScreen({
           />
           <Pressable
             accessibilityRole="button"
-            onPress={onSubmitSearch}
+            onPress={submitSearch}
             style={({ pressed }) => [styles.searchButton, pressed ? styles.pressed : null]}
           >
             <Text style={styles.searchButtonText}>
@@ -170,6 +181,21 @@ export function DestinationPickerScreen({
             {shareLinkMessage.length === 0 ? null : (
               <Text style={styles.message}>{shareLinkMessage}</Text>
             )}
+            {shareLinkState === 'ready' &&
+            onConfirmShared !== undefined &&
+            onDismissShared !== undefined ? (
+              <>
+                <PrimaryButton
+                  label={UI_TEXT.destinationPicker.shareConfirm}
+                  onPress={onConfirmShared}
+                />
+                <PrimaryButton
+                  label={UI_TEXT.destinationPicker.shareDismiss}
+                  variant="secondary"
+                  onPress={onDismissShared}
+                />
+              </>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>

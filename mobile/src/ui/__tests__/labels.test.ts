@@ -291,10 +291,11 @@ describe('目的地設定の状態文言（U06 / U08）', () => {
     const states = [
       'idle',
       'reading',
+      'ready',
       'no-url',
       'invalid',
       'success',
-      'network-required',
+      'needs-resolution',
     ] as const;
     states.forEach((state) => {
       if (state === 'idle') {
@@ -305,7 +306,8 @@ describe('目的地設定の状態文言（U06 / U08）', () => {
     });
     expect(shareLinkMessageLabel('no-url')).toContain('コピー');
     expect(shareLinkMessageLabel('invalid')).toContain('コピー');
-    expect(shareLinkMessageLabel('network-required')).toContain('コピー');
+    expect(shareLinkMessageLabel('needs-resolution')).toContain('コピー');
+    expect(shareLinkMessageLabel('ready')).toContain('目的地');
   });
 
   it('searchResultCountLabel: 0/1 件を自然に表示する', () => {
