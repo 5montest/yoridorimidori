@@ -1,54 +1,92 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+  Image,
+  PanResponder,
+  StyleSheet,
+  Text,
+  View,
+  type PanResponderGestureState,
+} from 'react-native';
 import type { GeoPoint } from '../../domain/types';
-import { geoToScreenPoint, screenPointToGeo, visibleTiles } from '../../domain/tileMath';
+import { clampZoom, screenPointToGeo, visibleTiles } from '../../domain/tileMath';
 import { UI_TEXT } from '../labels';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../theme';
 
 /** OSM タイル取得時の User-Agent（OSM タイル利用ポリシー: 識別可能な UA を推奨）。 */
 const TILE_USER_AGENT = 'yoridorimidori/0.1 (prototype; https://example.invalid/yoridorimidori)';
 
+/** ドラッグ中に表示しておく余白（px）。画面外のタイルも先に読み込んでおく。 */
+const TILE_PADDING_PX = 256;
+
+/** ピンチの倍率上限（タイルの余白を超えない範囲）。 */
+const MIN_PINCH_SCALE = 0.5;
+const MAX_PINCH_SCALE = 2;
+
+/** ダブルタップ判定の時間（ms）。 */
+const DOUBLE_TAP_MS = 300;
+
+/** ドラッグとみなす移動量（px）。 */
+const DRAG_THRESHOLD_PX = 4;
+
 export interface OsmMapViewProps {
   /** 地図の中心。 */
   readonly center: GeoPoint;
   /** ズーム（整数）。 */
   readonly zoom: number;
-  /** 選択中の地点（マーカー表示）。 */
-  readonly selected: GeoPoint | null;
-  /** タップされた地点（地理座標）。 */
-  readonly onPress: (point: GeoPoint) => void;
+  /** 地図を動かしたときの新しい中心（ドラッグ終了時に呼ばれる）。 */
+  readonly onCenterChange: (point: GeoPoint) => void;
+  /** ズーム変更（ピンチ・ダブルタップ）。 */
+  readonly onZoomChange: (zoom: number) => void;
 }
 
 /**
  * OpenStreetMap のラスタータイルを使う地図ビュー（S4）。
  *
- * - **Google Maps は使わない**（API キー不要・従量課金なし）。タイルは `tile.openstreetmap.org`。
- * - 表示範囲のタイルを `visibleTiles`（純粋関数）で計算し、`Image` を絶対配置で並べる。
- * - タップ位置は `screenPointToGeo`（純粋関数）で地理座標に変換して `onPress` に渡す。
- * - タイル取得に失敗した場合は案内を出す（オフライン時など）。地図が無くてもタップ選択は可能。
+ * 操作（Google マップ等と同じ「地図を動かして中央ピンを合わせる」方式）:
+ * - **1 本指ドラッグ**: 地図が指に追従してスクロール。離すと中央の座標を `onCenterChange` に渡す。
+ * - **ピンチ**: 2 本指の開閉でズーム（離したときに整数ズームへ確定）。
+ * - **ダブルタップ**: ズームイン。
+ * - 中央に**固定ピン**を表示する。ピンの先端が「選ばれる地点」。
+ *
+ * - Google Maps は使わない（API キー不要・従量課金なし）。タイルは `tile.openstreetmap.org`。
+ * - タイル計算・座標変換は `domain/tileMath.ts` の純粋関数を使う。
  * - 帰属表示（© OpenStreetMap contributors）を常時表示する（OSM の利用条件）。
  */
-export function OsmMapView({ center, zoom, selected, onPress }: OsmMapViewProps): ReactElement {
+export function OsmMapView({
+  center,
+  zoom,
+  onCenterChange,
+  onZoomChange,
+}: OsmMapViewProps): ReactElement {
   const [layout, setLayout] = useState<{ readonly width: number; readonly height: number }>({
     width: 0,
     height: 0,
   });
+  const [drag, setDrag] = useState<{ readonly dx: number; readonly dy: number }>({ dx: 0, dy: 0 });
+  const [pinchScale, setPinchScale] = useState(1);
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
 
+  // PanResponder は 1 度だけ作るため、最新値を ref で参照する。
+  const centerRef = useRef(center);
+  centerRef.current = center;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const pinchRef = useRef<{ readonly startDistance: number; scale: number } | null>(null);
+  const movedRef = useRef(false);
+  const lastTapRef = useRef(0);
+
   const tiles = useMemo(
-    () => visibleTiles(center, zoom, layout.width, layout.height),
+    () => visibleTiles(center, zoom, layout.width, layout.height, undefined, TILE_PADDING_PX),
     [center, zoom, layout.width, layout.height],
   );
 
-  // 中心・ズームが変わったら失敗状態をリセットする。
+  // 中心・ズームが変わったら失敗状態とドラッグ状態をリセットする。
   useEffect(() => {
     setFailedKeys(new Set<string>());
+    setDrag({ dx: 0, dy: 0 });
   }, [center.latitude, center.longitude, zoom]);
-
-  const markerPosition =
-    selected === null
-      ? null
-      : geoToScreenPoint(selected, center, zoom, layout.width, layout.height);
 
   const allTilesFailed = tiles.length > 0 && tiles.every((tile) => failedKeys.has(tile.key));
 
@@ -59,21 +97,103 @@ export function OsmMapView({ center, zoom, selected, onPress }: OsmMapViewProps)
     );
   };
 
-  const handlePress = (event: { nativeEvent: { locationX: number; locationY: number } }): void => {
-    if (layout.width === 0 || layout.height === 0) {
-      return;
-    }
-    const { locationX, locationY } = event.nativeEvent;
-    onPress(screenPointToGeo({ x: locationX, y: locationY }, center, zoom, layout.width, layout.height));
+  const markFailed = (key: string): void => {
+    setFailedKeys((current) => {
+      if (current.has(key)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
   };
 
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          pinchRef.current = null;
+          movedRef.current = false;
+        },
+        onPanResponderMove: (event, gestureState: PanResponderGestureState) => {
+          const touches = event.nativeEvent.touches;
+          if (touches.length >= 2) {
+            const first = touches[0];
+            const second = touches[1];
+            if (first === undefined || second === undefined) {
+              return;
+            }
+            const distance = Math.hypot(first.pageX - second.pageX, first.pageY - second.pageY);
+            if (pinchRef.current === null) {
+              pinchRef.current = { startDistance: distance, scale: 1 };
+            } else if (pinchRef.current.startDistance > 0) {
+              const rawScale = distance / pinchRef.current.startDistance;
+              const scale = Math.min(MAX_PINCH_SCALE, Math.max(MIN_PINCH_SCALE, rawScale));
+              pinchRef.current.scale = scale;
+              setPinchScale(scale);
+            }
+            return;
+          }
+          if (Math.abs(gestureState.dx) > DRAG_THRESHOLD_PX || Math.abs(gestureState.dy) > DRAG_THRESHOLD_PX) {
+            movedRef.current = true;
+          }
+          setDrag({ dx: gestureState.dx, dy: gestureState.dy });
+        },
+        onPanResponderRelease: (_event, gestureState: PanResponderGestureState) => {
+          const pinch = pinchRef.current;
+          pinchRef.current = null;
+          setPinchScale(1);
+          if (pinch !== null) {
+            const steps = Math.round(Math.log2(pinch.scale));
+            if (steps !== 0) {
+              onZoomChange(clampZoom(zoomRef.current + steps));
+            }
+            setDrag({ dx: 0, dy: 0 });
+            return;
+          }
+
+          const { width, height } = layoutRef.current;
+          if (movedRef.current && width > 0 && height > 0) {
+            const nextCenter = screenPointToGeo(
+              { x: width / 2 - gestureState.dx, y: height / 2 - gestureState.dy },
+              centerRef.current,
+              zoomRef.current,
+              width,
+              height,
+            );
+            setDrag({ dx: 0, dy: 0 });
+            onCenterChange(nextCenter);
+            return;
+          }
+
+          // タップ: ダブルタップでズームイン。
+          const now = Date.now();
+          if (now - lastTapRef.current < DOUBLE_TAP_MS) {
+            lastTapRef.current = 0;
+            onZoomChange(clampZoom(zoomRef.current + 1));
+          } else {
+            lastTapRef.current = now;
+          }
+          setDrag({ dx: 0, dy: 0 });
+        },
+        onPanResponderTerminate: () => {
+          pinchRef.current = null;
+          setPinchScale(1);
+          setDrag({ dx: 0, dy: 0 });
+        },
+      }),
+    [onCenterChange, onZoomChange],
+  );
+
   return (
-    <View style={styles.container} onLayout={handleLayout} testID="osm-map-view">
+    <View style={styles.container} onLayout={handleLayout} testID="osm-map-view" {...panResponder.panHandlers}>
       <View
-        accessible={false}
-        onStartShouldSetResponder={() => true}
-        onResponderRelease={handlePress}
-        style={StyleSheet.absoluteFill}
+        style={[
+          StyleSheet.absoluteFill,
+          { transform: [{ translateX: drag.dx }, { translateY: drag.dy }, { scale: pinchScale }] },
+        ]}
       >
         {layout.width > 0 && layout.height > 0
           ? tiles.map((tile) => (
@@ -85,33 +205,18 @@ export function OsmMapView({ center, zoom, selected, onPress }: OsmMapViewProps)
                   { left: tile.left, top: tile.top, width: tile.size, height: tile.size },
                 ]}
                 resizeMode="cover"
-                onError={() => {
-                  setFailedKeys((current) => {
-                    if (current.has(tile.key)) {
-                      return current;
-                    }
-                    const next = new Set(current);
-                    next.add(tile.key);
-                    return next;
-                  });
-                }}
+                onError={() => markFailed(tile.key)}
               />
             ))
           : null}
-
-        {markerPosition === null ? null : (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.marker,
-              { left: markerPosition.x - MARKER_SIZE / 2, top: markerPosition.y - MARKER_SIZE },
-            ]}
-          >
-            <View style={styles.markerPin} />
-            <View style={styles.markerShadow} />
-          </View>
-        )}
       </View>
+
+      {/* 中央固定ピン（先端が選択地点） */}
+      <View pointerEvents="none" style={styles.centerPin}>
+        <View style={styles.centerPinHead} />
+        <View style={styles.centerPinTip} />
+      </View>
+      <View pointerEvents="none" style={styles.centerDot} />
 
       {allTilesFailed ? (
         <View style={styles.errorBanner} pointerEvents="none">
@@ -126,7 +231,8 @@ export function OsmMapView({ center, zoom, selected, onPress }: OsmMapViewProps)
   );
 }
 
-const MARKER_SIZE = 28;
+const PIN_WIDTH = 28;
+const PIN_HEIGHT = 38;
 
 const styles = StyleSheet.create({
   container: {
@@ -138,26 +244,45 @@ const styles = StyleSheet.create({
   tile: {
     position: 'absolute',
   },
-  marker: {
+  centerPin: {
     position: 'absolute',
-    width: MARKER_SIZE,
-    height: MARKER_SIZE,
+    left: '50%',
+    top: '50%',
+    width: PIN_WIDTH,
+    height: PIN_HEIGHT,
+    marginLeft: -PIN_WIDTH / 2,
+    marginTop: -PIN_HEIGHT,
     alignItems: 'center',
   },
-  markerPin: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+  centerPinHead: {
+    width: PIN_WIDTH,
+    height: PIN_WIDTH,
+    borderRadius: PIN_WIDTH / 2,
     backgroundColor: COLORS.primary,
     borderWidth: 3,
     borderColor: COLORS.surface,
   },
-  markerShadow: {
-    width: 10,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    marginTop: 1,
+  centerPinTip: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 11,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: COLORS.primary,
+    marginTop: -1,
+  },
+  centerDot: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 8,
+    height: 8,
+    marginLeft: -4,
+    marginTop: -4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   attribution: {
     position: 'absolute',

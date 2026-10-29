@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Freshness,
   GpsAccuracyClass,
   HeadingAccuracyClass,
@@ -752,10 +752,10 @@ export const UI_TEXT = {
   mapPick: {
     title: '地図で選ぶ',
     back: '戻る',
-    instruction: '地図をタップして目的地を選びます',
+    instruction: '地図を動かして、ピンを目的地に合わせます',
     selectedLabel: '選択中',
     resolving: '場所を調べています…',
-    noSelection: '地図をタップすると場所が決まります',
+    noSelection: '地図を動かすと場所が決まります',
     /** 逆ジオコーディングが使えない場合の暫定の目的地名（U05 配線後も失敗時のフォールバック）。 */
     defaultDestinationName: '地図で選んだ場所',
     confirm: 'この場所を目的地にする',

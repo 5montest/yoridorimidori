@@ -115,3 +115,21 @@ describe('tileMath: 画面座標との相互変換', () => {
     expect(geo.longitude).toBeGreaterThan(TOKYO.longitude);
   });
 });
+
+describe('tileMath: ドラッグ用パディング', () => {
+  it('パディング指定で外側のタイルも含む（位置はビューポート基準）', () => {
+    const base = visibleTiles(TOKYO, 15, 390, 600);
+    const padded = visibleTiles(TOKYO, 15, 390, 600, undefined, 256);
+    expect(padded.length).toBeGreaterThan(base.length);
+    expect(Math.min(...padded.map((tile) => tile.left))).toBeLessThan(0);
+    expect(Math.min(...padded.map((tile) => tile.top))).toBeLessThan(0);
+    expect(Math.max(...padded.map((tile) => tile.left + tile.size))).toBeGreaterThan(390);
+    expect(Math.max(...padded.map((tile) => tile.top + tile.size))).toBeGreaterThan(600);
+  });
+
+  it('パディング 0 は従来と同じ', () => {
+    expect(visibleTiles(TOKYO, 15, 390, 600, undefined, 0).length).toBe(
+      visibleTiles(TOKYO, 15, 390, 600).length,
+    );
+  });
+});

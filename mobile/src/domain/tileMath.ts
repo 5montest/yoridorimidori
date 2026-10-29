@@ -101,8 +101,9 @@ export function osmTileUrl(tileX: number, tileY: number, zoom: number): string {
  * ビューポートに必要なタイル一覧を作る。
  *
  * - `center` を中心に `widthPx` × `heightPx` の範囲を覆うタイルを返す。
+ * - `paddingPx` を指定すると、その分だけ外側のタイルも含める（ドラッグ中の余白表示用）。
+ *   位置はビューポート左上を 0 とした px 座標のまま（`paddingPx` 分は負値になる）。
  * - 縦はタイル範囲外（極付近）を除外し、横は世界を折り返す（`osmTileUrl` が X を正規化）。
- * - `left` / `top` はビューポート左上を 0 とした px 座標（負値あり）。
  */
 export function visibleTiles(
   center: GeoPoint,
@@ -110,16 +111,20 @@ export function visibleTiles(
   widthPx: number,
   heightPx: number,
   tileSize: number = TILE_SIZE,
+  paddingPx: number = 0,
 ): readonly MapTile[] {
   const safeZoom = clampZoom(zoom);
   const scale = 2 ** safeZoom;
+  const padding = Number.isFinite(paddingPx) && paddingPx > 0 ? paddingPx : 0;
+  const viewWidth = widthPx + padding * 2;
+  const viewHeight = heightPx + padding * 2;
   const centerWorld = geoToWorldPixel(center, safeZoom);
-  const leftWorld = centerWorld.x - widthPx / 2;
-  const topWorld = centerWorld.y - heightPx / 2;
+  const leftWorld = centerWorld.x - viewWidth / 2;
+  const topWorld = centerWorld.y - viewHeight / 2;
   const minTileX = Math.floor(leftWorld / tileSize);
-  const maxTileX = Math.floor((leftWorld + widthPx) / tileSize);
+  const maxTileX = Math.floor((leftWorld + viewWidth) / tileSize);
   const minTileY = Math.floor(topWorld / tileSize);
-  const maxTileY = Math.floor((topWorld + heightPx) / tileSize);
+  const maxTileY = Math.floor((topWorld + viewHeight) / tileSize);
 
   const tiles: MapTile[] = [];
   for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
@@ -131,8 +136,8 @@ export function visibleTiles(
       tiles.push({
         key: `${safeZoom}/${wrappedX}/${tileY}/${tileX}`,
         url: osmTileUrl(tileX, tileY, safeZoom),
-        left: tileX * tileSize - leftWorld,
-        top: tileY * tileSize - topWorld,
+        left: tileX * tileSize - leftWorld - padding,
+        top: tileY * tileSize - topWorld - padding,
         size: tileSize,
       });
     }

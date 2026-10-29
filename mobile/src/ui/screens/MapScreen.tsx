@@ -72,7 +72,12 @@ export function MapScreen({
       </View>
 
       <View style={styles.mapArea}>
-        <OsmMapView center={center} zoom={zoom} selected={selectedPoint} onPress={onPick} />
+        <OsmMapView
+          center={center}
+          zoom={zoom}
+          onCenterChange={onPick}
+          onZoomChange={setZoom}
+        />
 
         <View style={styles.instructionBar} pointerEvents="none">
           <Text style={styles.instruction}>{UI_TEXT.mapPick.instruction}</Text>
