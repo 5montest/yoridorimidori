@@ -1516,16 +1516,21 @@ export const DEMO_SCENARIO_ID: ScenarioId;   // 既定: 'static'
 
 ### 9.3 鳥の描画と回転
 
+**マスコットは「オオハシ（トゥーカン）」**（2026-10-30 ユーザー決定）。**大きなクチバシが目的地の方向を指す**のが本アプリの視覚的アイデンティティ。クチバシが画面上（0°）を向いた状態を基準に描き、`Animated.View` の rotate で全体を回す。
+
 **構造（`ui/components/Bird.tsx`）**
 
 ```tsx
 // 設計スケッチ（実装は tasks.md のタスクで行う）
+// パスデータは designer 提供の ui/components/toucanPaths.ts（viewBox 0 0 100 100、クチバシ上向き）
 <Animated.View style={{ transform: [{ rotate: rotateInterpolation }] }}>
   <Svg width={w} height={h} viewBox="0 0 100 100">
-    {/* 鳥の形（Path 等）。上向き（0°）が「正面 = 目的地の方向」 */}
+    {TOUCAN_PATHS.map((p) => <Path key={p.id} d={p.d} fill={p.fill} />)}
   </Svg>
 </Animated.View>
 ```
+
+- **`react-native-svg` 15.16.0 の API は確認済み**（[svg-and-animation.md](docs/research/svg-and-animation.md)）: `Svg` の `width`/`height`/`viewBox`、`Path` の `d`/`fill`/`stroke`/`strokeWidth` 等を使用可。**SVG の props に `Animated.Value` を渡してはならない**（値を文字列化する実装のため解釈されない）。回転は必ず外側の `Animated.View`。
 
 - **回転は `Animated.View` の `transform: rotate` で行う**（RN コア）。SVG 要素の `transform` 属性による回転は**採用しない**（`react-native-svg` の API が ⚠️ 未確認のため。§18-1）。SVG は**図形描画のみ**に使う。仮に `react-native-svg` の `transform` props が実装時に確認できても、毎フレームの再レンダリングが必要になり `Animated.Value` + `Animated.View` より重いため、回転は外側の `Animated.View` に任せる。
 - **角度の持ち方**: `Animated.Value` に「累積回転（度）」を持たせる。`nextContinuousAngleDeg()`（§6.9）で目標値を決め、`Animated.timing(value, { toValue, duration: 250, easing, useNativeDriver: true })` で遷移。

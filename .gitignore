@@ -12,6 +12,8 @@ web-build/
 # ローカル検証・キャッシュ（DSH サンドボックス対策でワークスペース内に置く）
 .cache/
 .env-probe/
+.build-probe/
+home/
 .gradle/
 .android/
 .android-sdk/

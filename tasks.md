@@ -380,7 +380,7 @@ npx expo export --platform android --max-workers 1 --no-bytecode
 - E-04: `(89.9,0)→(89.9,10)` 有限かつ `0 <= θ < 360`
 - E-02: 対蹠点 `(0,0)→(0,180)` 有限かつ `0 <= θ < 360`
 - E-12: `NaN` / `Infinity` / 範囲外座標 → `null`
-- E-07: `relativeBearingDeg(0,180)=180` / `(0,-180)=180` / `(359,1)=2` / `(1,359)=-2` / target `540` → `180` / 非有限 → `null`
+- E-07: `relativeBearingDeg(0,180)=180` / `(0,-180)=180` / `(359,1)=-2` / `(1,359)=2` / target `540` → `180` / 非有限 → `null`（引数は `(targetBearing, heading)` の順。式 `target - heading` に従う。**2026-10-30 Lead 修正**: 旧記載の `(359,1)=2` は引数順の誤り）
 - E-07 プロパティ: 乱数 10,000 件で `(-180,180]` に収まる。`initialBearingDeg` は乱数 1,000 件で `0 <= θ < 360`
 
 **依存タスク**: T02, T03, T04
@@ -1038,12 +1038,13 @@ npx expo export --platform android --max-workers 1 --no-bytecode
 - `mobile/src/ui/screens/MainScreen.tsx`（新規）
 
 **実装内容の要点**
-- **着手前に `react-native-svg` 15.16.0 の公式 API を確認する**（§18-1。未確認のため）。使う要素は `Svg` / `Path` / `Circle` 程度に最小化。**確認できない場合は `View` の組み合わせで代替**してよい（要件は満たす）
-- 鳥の回転は **`Animated.View` の `transform: [{ rotate }]`**（RN コア）。SVG 要素の `transform` は使わない（§9.3、§18-1）
-  - `Animated.Value` に累積回転（度）を持つ。目標値は `nextContinuousAngleDeg`（T08）、ニュートラル（`relativeBearingDeg === null`）と到着（`arrived`）は目標 `0°`（ADR-03）
-  - `Animated.timing(value, { toValue, duration: 250, easing, useNativeDriver: true })`
-  - **`interpolate` の範囲外挙動は未確認（§18-2）** のため、`reduceContinuousAngle` で `±720°` に収め `inputRange: [-720, 720]` を使う安全側の実装を基本とする。初回マウントはアニメーションせず即時設定（ちらつき防止）
+- **鳥は「オオハシ（トゥーカン）」**（2026-10-30 ユーザー決定）。**大きなクチバシが目的地の方向を指す**。パスデータは designer 提供の **`mobile/src/ui/components/toucanPaths.ts`**（`TOUCAN_PATHS: readonly { id: string; d: string; fill: string }[]`、viewBox `0 0 100 100`、**クチバシが上（0°）向きで定義済み**）を使う。実装側でパスを自作しない
+- **`react-native-svg` 15.16.0 の API は確認済み**（`docs/research/svg-and-animation.md`）。`Svg` / `Path` の確定 props を使用。**SVG の props に `Animated.Value` を渡さない**（文字列化され解釈されない。回転は外側の `Animated.View` のみ）
+- 鳥の回転は **`Animated.View` の `transform: [{ rotate }]`**（RN コア）。SVG 要素の `transform` は使わない（§9.3）
+  - `useAnimatedValue` / `Animated.timing(value, { toValue, duration: 250, easing, useNativeDriver: true })`。目標値は `nextContinuousAngleDeg`（T08）、ニュートラル（`relativeBearingDeg === null`）と到着（`arrived`）は目標 `0°`（ADR-03）
+  - `value.interpolate({ inputRange: [-720, 720], outputRange: ['-720deg', '720deg'] })` を基本とし、`reduceContinuousAngle` で `±720°` に収める（外挿への安全策）
   - `+` が時計回り（`+90` = 右）として扱う。目視確認は D2（§18-3）
+- クチバシが上を向く基準角（0°）と `relativeBearingDeg` の符号の対応は **D2 で目視確認**し、逆なら rotate の符号を反転する
 - `NavStatusPanel`: §9.4 の表の全項目（GPS 精度 生値＋区分 / GPS 鮮度＋経過秒 / 方位精度 / 方位鮮度＋経過秒 / 方位基準 / 総合状態 / 警告）。**数値と文言を併記**（色は補助）。`ui/labels.ts`（T21）以外に文言を書かない
 - `MainScreen`: §9.2 のレイアウト（目的地名 or「目的地を選んでください」/ 鳥 / 距離（`formatDistanceM`）/ 相対方位の数値 / 状態 / 警告 / 画面切替ボタン群）。到着時は距離実値・鳥上向き・「到着」を大きく・相対方位は `—`（§9.5）。**表示専用**（props で `NavState` と目的地名・コールバックを受け取り、`hooks` / `adapters` を import しない）
 - `ErrorBoundary`: クラスコンポーネント（`getDerivedStateFromError` / `componentDidCatch`）。フォールバックは「表示中にエラーが発生しました」＋「目的地・記録は消えていません」＋`[メインに戻る]`。`componentDidCatch` は `console.error` のみ（§11.4）
