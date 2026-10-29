@@ -93,9 +93,30 @@ $env:ANDROID_HOME      = "<repo>\.android-sdk"   # ワークスペース内 SDK 
 $env:ANDROID_USER_HOME = "<repo>\.android"
 ```
 
+## 実機（Android）で動かす
+
+この開発環境では Android 実機 **Pixel 4a（Android 13）** を USB 接続して動作確認済み。
+
+```powershell
+# 1) 端末接続の確認
+adb devices
+
+# 2) PC 側: Metro を起動（HOME をワークスペース内へリダイレクトして ~/.expo の EPERM を回避）
+$env:USERPROFILE = "<repo>\home"; $env:HOME = "<repo>\home"
+cd mobile; npx expo start --max-workers 1 --port 8081
+
+# 3) 別ターミナル: 端末から PC の Metro へ USB 経由で到達させる
+adb reverse tcp:8081 tcp:8081
+adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
+```
+
+- 端末側には **Expo Go（SDK 58 版）** が必要（`expo.dev/go` の APK を `adb install -r` で導入済み）。
+- 端末がインターネット未接続でも、USB + `adb reverse` 経由なら Metro から読み込める（地図タイルは通信必須）。
+
 ## ステータス
 
 - [x] フェーズ1: 環境確認（PC 上での構築可否・Android 実行環境の readiness 判定）
-- [ ] フェーズ1: 仕様策定（requirements / architecture / tasks）
-- [ ] フェーズ1: プロジェクト雛形構築・PC 上でのビルド検証
+- [x] フェーズ1: 仕様策定（requirements / architecture / tasks）
+- [x] フェーズ1: プロジェクト雛形構築・PC 上でのビルド検証（`tsc --noEmit` / `jest --runInBand` / Metro バンドル）
+- [x] フェーズ1: Android 実機での起動確認（Pixel 4a / Expo Go 58.0.5 / `adb reverse` / 725 modules バンドル）
 - [ ] フェーズ2: 実装（1 タスクずつ実装・テスト）

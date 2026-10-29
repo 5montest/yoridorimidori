@@ -14,7 +14,7 @@
 | PC上の TypeScript 開発（tsc / Jest 単体テスト） | **可能** | Node 22 + npm 10 動作。npm キャッシュをワークスペース内へリダイレクトすれば `npm view` / `npx expo` が成功 |
 | Expo 開発サーバ / Metro バンドル（PC上） | **可能** | `npx expo --version` → `58.1.17` 成功。実バンドルは別途実証（`docs/research/pc-build-verification.md`） |
 | Web プレビュー（PC上でのUI確認） | **可能（地図を除く）** | Expo web export で確認予定。react-native-maps の Web 対応は未確認 → 地図はフォールバック必須 |
-| Android 実機での実行 | **現状不可 → 要準備** | `adb devices` 空。USB接続端末なし（usbipd にも該当デバイスなし） |
+| Android 実機での実行 | **✅ 可能（2026-10-30 確認済み）** | Pixel 4a（Android 13）を USB 接続。Expo Go 58.0.5 + `adb reverse` + Metro で起動・描画を確認（§5.4） |
 | Android エミュレータでの実行 | **現状不可 → 要準備** | system-image **0件**、AVD **0件**。既存SDKは書込不可のため、SDKをワークスペース内に用意する必要 |
 | ネイティブ development build（react-native-maps 用） | **条件付きで可能（未実証）** | `~/.gradle`・`%LOCALAPPDATA%\Android\Sdk` が書込不可 → `GRADLE_USER_HOME` / `ANDROID_USER_HOME` のリダイレクトが必須。実ビルドは未実行 |
 | バックエンド | 不要（要件どおり） | クラウド設定・APIキー類は一切不要 |
@@ -144,6 +144,26 @@
 
 - `emulator -accel-check` → **`WHPX(10.0.26300) is installed and usable.`** … ハードウェアアクセラレーションは利用可能。
 - つまり「system-image と AVD さえ用意できれば」エミュレータは高速に動く見込み（実起動は未確認）。
+
+### 5.4 実機での動作確認（2026-10-30 **成功**）
+
+- 接続端末: **Pixel 4a**（`12231JEC206116`）/ **Android 13（API 33）** / arm64-v8a / 1080x2340
+- Expo Go: **SDK 58 版 58.0.5**（`expo.dev` 配布 APK）を `adb install -r` で導入（11.5s）
+- 手順（すべて実測で成功）:
+  1. `adb reverse tcp:8081 tcp:8081`（USB 経由で端末から PC の Metro へ到達）
+  2. PC 側: `USERPROFILE` / `HOME` をワークスペース内 `home/` へリダイレクトして `npx expo start --max-workers 1 --port 8081`
+     （リダイレクトしないと Expo CLI が `~/.expo` に書けず `EPERM` 警告が出る）
+  3. `adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"`
+- 結果: Metro ログ `Android Bundled 10599ms index.ts (725 modules)`、Expo Go 上でアプリが描画。
+  開発者メニューに **「寄鳥美鳥地 / SDK version: 58.0.0」** が表示された。
+- 証跡: `.cache/screen4.png`（テンプレート画面 + 開発者メニュー）
+- 注意点:
+  - 端末は**インターネット未接続**（`play.googleapis.com` 等の DNS 解決失敗）でも、USB + `adb reverse` 経由でローカル Metro に到達できれば動作する。
+  - ただし**地図タイル（Google Maps）はネットワーク必須**。オフラインでは地図が表示されないため、地図なしフォールバック（D-03）の妥当性が裏付けられた。
+  - 非致命の警告: `React Native DevTools` インストールの `spawn EPERM`、`~/.expo` の `EPERM`（HOME リダイレクトで解消）。
+  - 端末の時計が PC より約 46 分遅れている（`adb shell date` で確認）。鮮度計算は端末内の単調時計を使うため影響しないが、ログの時刻比較には注意。
+
+---
 
 ## 6. レイヤ別の可否判定と、その理由
 
