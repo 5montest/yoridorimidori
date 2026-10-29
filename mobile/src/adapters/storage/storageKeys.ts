@@ -19,6 +19,12 @@ export const DESTINATIONS_STORAGE_KEY_V1 = 'yoridorimidori/destinations/v1';
 /** サンプルログ（FR-09）: `{ schemaVersion: 1, items: SampleLogEntry[] }`（リング 300 件）。 */
 export const SAMPLES_STORAGE_KEY = 'yoridorimidori/samples/v1';
 
+/**
+ * 小さな設定値（Phase 4 / U10 のオンボーディング表示済みフラグ等）。
+ * `{ schemaVersion: 1, onboardingSeen: boolean }`。
+ */
+export const PREFERENCES_KEY = '@yoridorimidori/preferences/v1';
+
 /** 破損データの退避キーのプレフィックス（§10.2）。 */
 export const QUARANTINE_KEY_PREFIX = 'yoridorimidori/quarantine/';
 

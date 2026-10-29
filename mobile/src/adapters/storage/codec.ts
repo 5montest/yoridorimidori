@@ -31,6 +31,9 @@ export const LEGACY_DESTINATIONS_SCHEMA_VERSION = 1;
 /** サンプルストアの現行スキーマバージョン（変更なし）。 */
 export const SAMPLES_SCHEMA_VERSION = 1;
 
+/** 設定ストア（オンボーディング表示済み等）の現行スキーマバージョン。 */
+export const PREFERENCES_SCHEMA_VERSION = 1;
+
 /** サンプルの文字列長がこれを超えたら縮小保存する（§10.5。Android の 1 エントリ約 2 MB 対策）。 */
 export const SAMPLES_CHAR_BUDGET = 200_000;
 
@@ -75,6 +78,36 @@ export function encodeDestinations(
 /** サンプルストアを JSON 化する（古い順の配列をそのまま書く）。 */
 export function encodeSamples(items: readonly SampleLogEntry[]): string {
   return JSON.stringify({ schemaVersion: SAMPLES_SCHEMA_VERSION, items });
+}
+
+/** 設定ストアを JSON 化する（Phase 4 / U10）。 */
+export function encodePreferences(onboardingSeen: boolean): string {
+  return JSON.stringify({ schemaVersion: PREFERENCES_SCHEMA_VERSION, onboardingSeen });
+}
+
+/**
+ * 設定ストアを復号する。**破損・型不正・未知バージョンは「未見（false）」にフォールバック**する
+ * （throw しない。初回起動と同じ扱いにする）。
+ */
+export function decodePreferences(raw: string | null): boolean {
+  if (raw === null || raw.length === 0) {
+    return false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (!isRecord(parsed)) {
+    return false;
+  }
+  const version = parsed.schemaVersion;
+  const effectiveVersion = version === undefined || version === null ? 1 : version;
+  if (effectiveVersion !== PREFERENCES_SCHEMA_VERSION) {
+    return false; // 未知（将来）バージョンは安全側で未見扱い
+  }
+  return parsed.onboardingSeen === true;
 }
 
 /** 目的地ストアを復号する。破損・型不正でも throw しない（v1 は v2 に読み替える）。 */
