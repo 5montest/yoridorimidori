@@ -348,3 +348,36 @@
 | 7 | 単体テスト・型検査 | ✅ **35 suites / 645 tests PASS**・`tsc` 0 |
 
 証跡: `device-v6-main-2026-10-30.png` / `device-v6-devmenu-2026-10-30.png` / `device-v6-status-detail-2026-10-30.png`
+
+---
+
+## V7 検証: オオハシ画像の差し替え（2026-10-30）
+
+### 背景（ユーザー要望）
+「オオハシの画像もクオリティ低いから GPT の画像生成で用意する」→ 生成画像を透過処理・正規化してアセット差し替え。
+
+### 処理内容
+- 生成画像（1254×1254 / RGBA / 背景は既に透過）を受け取り、
+  - **白背景アンマット**: 半透明エッジ画素（11,462 画素）を `RGB = a*bird + (1-a)*white` から逆算して白フリンジを除去
+  - **トリミング**: alpha>8 のバウンディングボックス（608×1208）
+  - **正規化**: 1024×1024・高さ 88.5%・中央配置（旧アセットと同じレイアウト。回転時に欠けない）
+  - 四隅 alpha=0 を確認、`mobile/assets/toucan.png`（267KB）に保存
+- ソース画像は `docs/assets/toucan-source-2026-10-30.png` に保存（再現用）
+- プレビュー: `docs/assets/toucan-preview-cream.png`（クリーム背景合成）
+
+### ビルド時の注意（重要）
+- **アセットだけを変更した場合、Gradle のバンドルタスクが UP-TO-DATE のままで APK に旧画像が残る**ことがある。
+  → `android/app/build/generated/assets/react` と `android/app/build/intermediates/assets/debug` を削除してから再ビルドする。
+- 確認方法: APK 内の `res/drawable-mdpi-v4/assets_toucan.png` のサイズが新アセットと一致するか（旧 43,350 B → 新 267,269 B）。
+
+### 実機検証（Pixel 4a）
+
+| # | 検証項目 | 結果 |
+|---|---|---|
+| 1 | オンボーディング（0°上向き） | ✅ 新オオハシが正立表示 |
+| 2 | メイン画面（相対方位 180°） | ✅ 新オオハシが 180° 回転（クチバシが下向き＝真後ろ） |
+| 3 | 透過・白フリンジ | ✅ クリーム背景でハローなし |
+| 4 | クラッシュ / ANR | ✅ 0 件 |
+| 5 | 単体テスト・型検査 | ✅ 35 suites / 645 tests PASS・`tsc` 0 |
+
+証跡: `device-v7-toucan-onboarding-2026-10-30.png` / `device-v7-toucan-rotated-2026-10-30.png` / `toucan-preview-cream.png`

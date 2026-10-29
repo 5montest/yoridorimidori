@@ -2279,3 +2279,17 @@ readonly lastUsedAtEpochMs: number | null; // 最近使った順の基準。未�
   - `ui/components/OsmMapView.tsx` — タイル `Image` の絶対配置・タップ選択・マーカー・帰属表示（© OpenStreetMap contributors）。UI 層のみ（hooks/adapters を import しない）。
 - `MapScreen` は `OsmMapView` を使用。ズームは UI 側で 10〜18 に制限。
 - 共有テキスト解決（`adapters/network/SharedTextResolver.ts`）は、短縮リンクを HTTP 取得し **展開先 URL / HTML 本文（`!3d!4d`・`@lat,lng`・`"latitude"/"longitude"`・`ll=` 等）から座標抽出**。場所名は「共有タイトル → 共有本文 → HTML og:title」の順（汎用名は除外）。
+
+---
+
+## 21. オオハシ画像アセット（2026-10-30 差し替え）
+
+- 現在のアセットは **GPT 画像生成で作成したもの**（ユーザー提供）。ソースは `docs/assets/toucan-source-2026-10-30.png`。
+- 仕様（旧アセットと同一。`Bird.tsx` は無変更で動作）:
+  - `mobile/assets/toucan.png`: **1024×1024 / RGBA（透過）/ クチバシ上向き 0° / 鳥の高さ 88.5% / 中央配置**
+  - 回転は `Animated.View` の `transform: rotate`（画像の中心回転）。`Bird.tsx` は `Image` で表示。
+- 生成画像の加工:
+  - 白背景アンマット（半透明エッジの白フリンジ除去）
+  - alpha バウンディングボックスでトリミング
+  - 1024 角・高さ 88.5%・中央に正規化
+- 注意: **アセットのみ変更した場合は Gradle のバンドルタスクが再実行されない**ことがある。`android/app/build/generated/assets/react` を削除して再ビルドする（production-build.md §10.8）。

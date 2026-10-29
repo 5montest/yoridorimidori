@@ -493,3 +493,19 @@ Expo Go では動作しない（APK / development build のみ）。
   - `ui/components/OsmMapView.tsx`: タイル描画・タップ選択・帰属表示
 - ビルド設定の変更は不要（API キー環境変数は不要になった）。
 - OSM タイル利用ポリシー: 大量アクセス禁止・帰属表示必須・識別可能な User-Agent 推奨。本番規模では自前タイルサーバ / MapTiler / Stadia Maps 等を検討。
+
+---
+
+## 10.8 画像アセットだけ変更した場合の再ビルド手順（2026-10-30）
+
+RN/Expo のバンドルタスクは JS の変更を入力にしているため、**画像アセットだけを差し替えると APK に旧画像が残る**ことがある。
+
+```powershell
+# バンドル成果物を削除してから再ビルド
+Remove-Item -Recurse -Force C:\w\app\android\app\build\generated\assets\react
+Remove-Item -Recurse -Force C:\w\app\android\app\build\intermediates\assets\debug
+cd C:\w\app\android
+.\gradlew.bat assembleDebug --no-daemon
+```
+
+確認: APK 内 `res/drawable-mdpi-v4/assets_toucan.png` のサイズが新しいアセットと一致すること。
