@@ -371,6 +371,8 @@ export interface NavState {
 3. `-0` は保持しない（`0` に正規化。§6.3）。
 4. `NaN` / `Infinity` をデータモデルに入れない（アダプタ境界で弾く。§5.1 / §11）。
 
+> **Phase 4 追記**: `Destination` に `favorite: boolean` / `lastUsedAtEpochMs: number | null` を追加した（§19.2）。
+
 ---
 
 ## 4. ポート（インターフェース）定義
@@ -1628,6 +1630,9 @@ export const DEMO_SCENARIO_ID: ScenarioId;   // 既定: 'static'
 - **`mockMode` / シナリオ / 取得プロファイルは永続化しない**（起動時は常に OFF・既定プロファイルから開始）。これらは開発用の一時状態であり、再起動後に Mock のまま起動して実センサーを取得しない事故を避けるため。永続化が必要になった場合は `yoridorimidori/settings/v1` を追加する（本フェーズでは**作らない**）。
 - **`meta` キーは作らない**（スキーマバージョンは各値の中に持つ。`lastSavedAt` は記録から算出可能）。
 
+> **Phase 4 追記（§19.6）**: 目的地は **`yoridorimidori/destinations/v2`** に移行した（v1 は移行用の読み取りのみ）。
+> 設定値は `@yoridorimidori/preferences/v1` に置く（オンボーディング表示済みフラグ）。詳細は §19.6。
+
 ### 10.2 スキーマバージョンとマイグレーション
 
 - 読み込み時: `JSON.parse` → 型ガード（`isDestinationArray` 相当の検証）→ `schemaVersion === 1` を確認。
@@ -1992,6 +1997,12 @@ mobile/
 - `jest` の `preset: "jest-expo"` と `transformIgnorePatterns`（`react-native-svg` を含む）は設定済みで、**変更不要**。
 - 依存追加は**不要**（§付録A の項目はいずれも「入れない」判断）。
 
+> **Phase 4 追記（§19）**: 上記ツリーに `domain/{shareLink,placeCandidate,destinationOrder}.ts`、
+> `ports/{placeSearch,clipboard,deepLink,preferences}.ts`、
+> `adapters/expo/{ExpoPlaceSearchProvider,ExpoClipboardProvider,ExpoLinkingProvider}.ts`、
+> `adapters/storage/AsyncStoragePreferencesRepository.ts`、
+> `hooks/{destinationPickerReducer,useDestinationPicker}.ts` を追加した。
+
 ---
 
 ## 15. requirements との整合
@@ -2123,6 +2134,90 @@ mobile/
 | 14 | **Web プレビュー用依存 3 点の追加可否** | FR-10 の「全画面」目視 | Lead/ユーザー判断 | **実装前（要承認）** | Jest のみで検証（ロジック） |
 | 15 | 実機の方位精度・応答（実測） | チューニング（D-08/D-09） | 実機で 30 分計測 | D-04 後 | 暫定閾値のまま |
 | 16 | Android の `minSdkVersion` 実値（D-10） | なし（記録のみ） | prebuild 後の `build.gradle` | ネイティブビルド時 | 記録だけ行う |
+
+---
+
+## 19. Phase 4: UX 刷新で追加したレイヤ（U01〜U05 実装済み）
+
+> 背景: 「目的地設定が座標の直打ちで一般ユーザーに使えない」問題への対応（2026-10-30 ユーザー指示）。
+> 設計の正は [docs/ux-design.md](docs/ux-design.md)、外部 API の確定仕様は
+> [docs/research/destination-ux-apis.md](docs/research/destination-ux-apis.md)。
+> 本章は **U01〜U05（データ層）で実装済み**の追加レイヤを §3 / §4 / §6 / §10 / §14 に追記するもの。
+> UI（U06〜U13）の画面仕様は ux-design.md §4 を正とする。
+
+### 19.1 追加した依存（Lead 実施済み）
+
+| パッケージ | バージョン | 用途 | 出典 |
+|---|---|---|---|
+| `expo-clipboard` | `~58.0.4` | 共有テキストの貼り付け経路（クリップボード読み取り） | notes §2.1 / destination-ux-apis §2 |
+| `expo-linking` | `~58.0.15` | ディープリンク受信（`getInitialURL` / `addEventListener('url')` / `unwrapDevLaunchURL`） | destination-ux-apis §3 |
+
+### 19.2 データモデル変更（§3.2 へ追記）
+
+```ts
+// domain/types.ts — Destination に追加（required）
+readonly favorite: boolean;              // ☆（お気に入り）。既定 false
+readonly lastUsedAtEpochMs: number | null; // 最近使った順の基準。未使用は null
+```
+
+- 最近使った場所 = `lastUsedAtEpochMs` 降順の上位 5 件、お気に入り = `favorite === true`（ux-design §7）。
+- 目的地を選んだ時点で `lastUsedAtEpochMs` を更新する（`DestinationRepository.markUsed`）。
+
+### 19.3 新規 domain（純粋関数。外部 import なし）
+
+| ファイル | 主な export | 役割 |
+|---|---|---|
+| `domain/shareLink.ts` | `parseSharedLocation` / `isShortMapLink` / `parseDeepLinkDestination` / `SharedLocation` / `SharedLocationKind` | 共有テキスト・URL の解析。`geo:lat,lon` / Google マップ URL の `q`・`query`・`ll`・`daddr`・`destination` / 本文の `lat, lon` に対応。`maps.app.goo.gl` は `{ point: null, needsResolution: true }`。**短縮リンクの HTTP 解決は行わない**（NFR-02 外部通信ゼロ）。`parseDeepLinkDestination` は `yoridorimidori://set?lat=..&lon=..&name=..` / Expo Go の `exp://.../--/set?...` を解析 |
+| `domain/placeCandidate.ts` | `PlaceCandidate` / `PlaceCandidateSource` / `GeocodedAddressLike` / `createPlaceCandidate` / `buildDestinationName` / `buildAddressLine` / `FALLBACK_DESTINATION_NAME` / `extractUrls` / `extractCoordinatePair` | 場所候補の型・検証と、逆ジオコーディング住所からの表示名生成。`buildDestinationName` は**オーバーロード**（文字列→`string \| null`、`GeocodedAddressLike`→`string`）。名前が取れない場合は `FALLBACK_DESTINATION_NAME`（=「選択した地点」）にフォールバック（文言集約ルールの例外として domain に配置。Lead 決定） |
+| `domain/destinationOrder.ts` | `sortRecent` / `filterFavorites` / `recentDestinations` / `RecentSortable` | 最近順（`lastUsedAtEpochMs` 降順・`null` は末尾・安定ソート）とお気に入りフィルタ。`Destination` の一部フィールドだけを要求する構造的部分型で実装 |
+
+### 19.4 新規ポート（§4 へ追記）
+
+| ファイル | 契約 | 契約上の要点 |
+|---|---|---|
+| `ports/placeSearch.ts` | `PlaceSearchProvider { isAvailable(); search(query); reverse(point) }` + `PlaceCandidate` 再 export | **throw しない**。0 件・失敗は `[]` / `null`。失敗詳細はアダプタの `onError`（実装詳細）で通知。**geocode は Android 実装で最大 1 件**（destination-ux-apis §1.2）を前提にし、複数件前提の UI にしない |
+| `ports/clipboard.ts` | `ClipboardProvider { readText(): Promise<string \| null> }` | 空・失敗は `null`。**起動時に自動で読まない**（Android 10+ はフォーカス中のアプリのみ読める。destination-ux-apis §2.2） |
+| `ports/deepLink.ts` | `DeepLinkProvider { getInitialUrl(); subscribe(handler) }` | 生 URL を返す（`/--/` 除去・クエリ解析は domain の純粋関数）。購読解除は冪等 |
+| `ports/preferences.ts` | `PreferencesRepository { getOnboardingSeen(); setOnboardingSeen(seen) }` | オンボーディング表示済みフラグ等。`mockMode` / シナリオ / 取得プロファイルは永続化しない（§10.1） |
+| `ports/destinationRepository.ts`（追記） | `markUsed(id): Promise<void>` / `setFavorite(id, favorite): Promise<void>` | 存在しない id は無視。`lastUsedAtEpochMs` の時刻は実装が注入 `Clock` から決める |
+
+### 19.5 新規 adapters（§5 へ追記）
+
+| ファイル | 内容 | 使用する確定 API と出典 |
+|---|---|---|
+| `adapters/expo/ExpoPlaceSearchProvider.ts` | `PlaceSearchProvider` 実装。`search` は geocode 結果を 0〜1 件の候補に変換（候補名 = 検索語。geocode は座標しか返さないため address は null）。`reverse` は住所 → `buildDestinationName` / `buildAddressLine` | `Location.geocodeAsync` / `reverseGeocodeAsync`（destination-ux-apis §1.2。Expo Go 同梱・API キー不要・要ネットワーク・Android は要前景権限） |
+| `adapters/expo/ExpoClipboardProvider.ts` | `ClipboardProvider` 実装。**ユーザー操作時のみ** `readText()` を呼ぶ | `Clipboard.getStringAsync`（同 §2.1） |
+| `adapters/expo/ExpoLinkingProvider.ts` | `DeepLinkProvider` 実装。起動 URL は `unwrapDevLaunchURL` を通してから返す | `Linking.getInitialURL` / `addEventListener('url')` / `unwrapDevLaunchURL`（同 §3.1） |
+| `adapters/storage/AsyncStoragePreferencesRepository.ts` | `PreferencesRepository` 実装。`{ schemaVersion: 1, onboardingSeen: boolean }`。未設定・破損・型不正・未知バージョンは **false（未見）**、読み書き失敗は `onWarning` のみで throw しない | AsyncStorage 2.2.0（notes §6.1） |
+
+### 19.6 ストレージ v2 移行（§10.1 / §10.2 へ追記）
+
+| キー | 内容 |
+|---|---|
+| `yoridorimidori/destinations/v2` | `{ schemaVersion: 2, items: Destination[], selectedId: string \| null }`（現行・**書き込み先**） |
+| `yoridorimidori/destinations/v1` | 旧形式（`favorite` / `lastUsedAtEpochMs` なし）。**読み取りのみ**。v2 が無い初回読み込み時に自動移行し、v1 は残置 |
+| `yoridorimidori/samples/v1` | 変更なし（`schemaVersion: 1`） |
+| `@yoridorimidori/preferences/v1` | `{ schemaVersion: 1, onboardingSeen: boolean }` |
+
+- `adapters/storage/codec.ts`: 定数を `DESTINATIONS_SCHEMA_VERSION = 2` / `LEGACY_DESTINATIONS_SCHEMA_VERSION = 1` / `SAMPLES_SCHEMA_VERSION = 1` / `PREFERENCES_SCHEMA_VERSION = 1` に整理。`decodeDestinations` は v1・`schemaVersion` 欠落を既定値（`favorite: false` / `lastUsedAtEpochMs: null`）で補完し、`migratedFromVersion` を返す。`encodePreferences` / `decodePreferences` を追加。
+- `AsyncStorageDestinationRepository`: v2 優先 → 無ければ v1 を読み、成功時に v2 へ書き戻す。破損時は**読んだキー**を基準に quarantine して初期化。
+
+### 19.7 新規 hooks（§7 へ追記）
+
+| ファイル | 内容 |
+|---|---|
+| `hooks/destinationPickerReducer.ts` | 目的地選択（S3〜S5）の**純粋 reducer / セレクタ / 変換ヘルパ**。検索の 300ms debounce 状態・`searchGeneration` による古い応答破棄と二重送信防止・0 件/失敗・地図逆ジオコーディングの世代管理・クリップボード/ディープリンクの確認待ち（`PendingShared`） |
+| `hooks/useDestinationPicker.ts` | 上記 reducer を React に接続するフック。**`adapters/` を import しない**（ポート型のみ受け取り、具体実装は App が注入）。`actions`: `setQuery` / `clearQuery` / `retrySearch` / `checkClipboard` / `dismissShared` / `confirmShared` / `selectSearchResult` / `selectMapPoint` / `confirmMapPoint` / `clearMapPoint` / `confirmCurrentLocation` / `toggleFavorite`。`derived`: `isSearchBusy` / `searchResultKind` / `sharedBannerKind` / `canConfirmMapPoint` |
+
+- debounce は `setTimeout`（実アプリ）だが、**純粋ロジックは reducer でテスト**する（`jest.useFakeTimers()` 不使用の方針を維持。§12.4）。
+- 目的地の保存・選択・`markUsed` はフックの責務ではなく、`onConfirm(input)` を受けた App / `useNavApp` 側の責務。
+
+### 19.8 テスト（§12.2 へ追記）
+
+追加したテストファイル: `domain/__tests__/{shareLink,placeCandidate,destinationOrder}.test.ts`、
+`adapters/__tests__/{expoPlaceSearch,expoClipboard,expoLinking,asyncStoragePreferencesRepository}.test.ts`、
+`hooks/__tests__/destinationPicker.test.ts`（U01〜U05 完了時点で **33 suites / 604 tests PASS**。以降の UI タスクで増加）。
+外部 API のテストは**テストファイル内のインライン `jest.mock`**（§12.4）。AsyncStorage は `__mocks__` の公式モックを使う。
 
 ---
 

@@ -1643,23 +1643,28 @@ adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
 
 ### 9.1 タスク一覧
 
-| ID | 名称 | 依存 | 規模 | 完了条件 |
-|---|---|---|---|---|
-| **U01** | 共有リンク・テキスト解析（純粋関数） | T01 | 中 | `parseSharedLocation` / `sortRecent` / `buildDestinationName` のテスト PASS |
-| **U02** | 型・ポート拡張 | U01 | 中 | `Destination` に favorite/lastUsedAt、`PlaceSearchProvider` / `ClipboardProvider` / `DeepLinkProvider` を定義。typecheck 0 |
-| **U03** | Expo アダプタ（検索・クリップボード・リンク） | U02 | 中 | インライン `jest.mock` で 3 アダプタのテスト PASS。外部 API は research の確定仕様のみ |
-| **U04** | リポジトリ拡張（favorite/lastUsedAt の永続化） | U02 | 中 | 既存データ補完・`markUsed`・お気に入り永続化のテスト PASS |
-| **U05** | `useDestinationPicker`（検索/最近/お気に入り/クリップボード/ディープリンク） | U03, U04 | 大 | 検索 debounce・0 件・失敗・二重送信防止のロジックテスト PASS |
-| **U06** | 目的地選択画面（S3） | U05, U13 | 大 | typecheck 0。検索・現在地・地図・最近・お気に入り・共有リンク導線が表示される |
-| **U07** | 地図で選ぶ画面（S4） | U06 | 中 | `MapView.onPress` で地点選択→逆ジオコーディング→確定。typecheck 0 |
-| **U08** | 検索結果 UI（S5） | U06 | 小 | 候補リスト・ローディング・0 件・失敗表示。typecheck 0 |
-| **U09** | メイン画面刷新（S2） | T22, U13 | 大 | 目的地チップ・大きな距離・8 方位の言葉・1 行サマリ・主要ボタン。デバッグ要素が常時表示されない |
-| **U10** | オンボーディング（S1） | U13 | 中 | 初回のみ 3 枚。スキップ可。再表示は開発メニューから |
-| **U11** | 開発メニュー隔離（S7） | T24, U13 | 中 | タイトル長押しで開発メニュー。座標入力・Mock・記録はここに移動。一般画面に露出しない |
-| **U12** | 状態詳細シート（S6） | U09 | 中 | 精度・鮮度・警告を一般向け文言で表示。数値は詳細のみ |
-| **U13** | 配線・ラベル・テーマ（App / labels / theme） | U06, U09 | 中 | 画面遷移・文言・色・余白の更新。typecheck 0 |
-| **U14** | 実機検証（新フロー） | U06-U13 | 中 | F2〜F6 の各フローを実機で確認し `docs/research/device-verification.md` に追記・スクショ保存 |
-| **U15** | ドキュメント更新 | U14 | 小 | requirements/architecture/tasks/README を UX 刷新に合わせて更新 |
+> **データ層（U01〜U05）は完了**（実装メモは §9.6）。状態列の ✅ は `npm run verify` 緑でのコミット済みを示す。
+
+| ID | 名称 | 依存 | 規模 | 完了条件 | 状態 |
+|---|---|---|---|---|---|
+| **U01** | 共有リンク・テキスト解析（純粋関数） | T01 | 中 | `parseSharedLocation` / `sortRecent` / `buildDestinationName` のテスト PASS | ✅ `8ad3276` |
+| **U02** | 型・ポート拡張 | U01 | 中 | `Destination` に favorite/lastUsedAt、`PlaceSearchProvider` / `ClipboardProvider` / `DeepLinkProvider` を定義。typecheck 0 | ✅ `ae1a8a1` |
+| **U03** | Expo アダプタ（検索・クリップボード・リンク） | U02 | 中 | インライン `jest.mock` で 3 アダプタのテスト PASS。外部 API は research の確定仕様のみ | ✅ `95ff04c` |
+| **U04** | リポジトリ拡張（favorite/lastUsedAt の永続化） | U02 | 中 | 既存データ補完・`markUsed`・お気に入り永続化のテスト PASS | ✅ `e9bc395` |
+| **U05** | `useDestinationPicker`（検索/最近/お気に入り/クリップボード/ディープリンク） | U03, U04 | 大 | 検索 debounce・0 件・失敗・二重送信防止のロジックテスト PASS | ✅ `3408230` |
+| **U06** | 目的地選択画面（S3） | U05, U13 | 大 | typecheck 0。検索・現在地・地図・最近・お気に入り・共有リンク導線が表示される | 未着手 |
+| **U07** | 地図で選ぶ画面（S4） | U06 | 中 | `MapView.onPress` で地点選択→逆ジオコーディング→確定。typecheck 0 | 未着手 |
+| **U08** | 検索結果 UI（S5） | U06 | 小 | 候補リスト・ローディング・0 件・失敗表示。typecheck 0 | 未着手 |
+| **U09** | メイン画面刷新（S2） | T22, U13 | 大 | 目的地チップ・大きな距離・8 方位の言葉・1 行サマリ・主要ボタン。デバッグ要素が常時表示されない | 未着手 |
+| **U10** | オンボーディング（S1） | U13 | 中 | 初回のみ 3 枚。スキップ可。再表示は開発メニューから | 未着手 |
+| **U11** | 開発メニュー隔離（S7） | T24, U13 | 中 | タイトル長押しで開発メニュー。座標入力・Mock・記録はここに移動。一般画面に露出しない | 未着手 |
+| **U12** | 状態詳細シート（S6） | U09 | 中 | 精度・鮮度・警告を一般向け文言で表示。数値は詳細のみ | 未着手 |
+| **U13** | 配線・ラベル・テーマ（App / labels / theme） | U06, U09 | 中 | 画面遷移・文言・色・余白の更新。typecheck 0 | 未着手 |
+| **U14** | 実機検証（新フロー） | U06-U13 | 中 | F2〜F6 の各フローを実機で確認し `docs/research/device-verification.md` に追記・スクショ保存 | 未着手 |
+| **U15** | ドキュメント更新 | U14 | 小 | requirements/architecture/tasks/README を UX 刷新に合わせて更新 | 進行中（architecture §19 / 本書 §9.6 更新済み。U14 後に最終化） |
+
+> **追加実施（U02 ポートの具体実装）**: `adapters/storage/AsyncStoragePreferencesRepository.ts`（commit `d80aaba`）。
+> オンボーディング表示済みフラグの永続化。UI（U10）が App で生成して注入する。
 
 ### 9.2 依存と並列化
 
@@ -1672,7 +1677,7 @@ U09（S2 刷新）・U10（S1）・U11（S7）・U12（S6）─┴→ U13 → U1
   UI 側は U02 の型・ポート確定後に U06〜U08 へ進む（それまでは U09〜U12 を実装）。
 - 依存追加（`expo-clipboard` / `expo-linking`）と `app.json` の `scheme` 追加は **Lead が実施済み**（U タスク内では依存追加しない）。
 
-### 9.3 主要な型・ポート契約（U02 で実装する内容）
+### 9.3 主要な型・ポート契約（U02 で実装済み）
 
 ```ts
 // domain/types.ts（追加）
@@ -1692,7 +1697,7 @@ interface PlaceCandidate {
 }
 interface PlaceSearchProvider {
   isAvailable(): Promise<boolean>;
-  search(query: string): Promise<PlaceCandidate[]>;        // 0 件は []
+  search(query: string): Promise<PlaceCandidate[]>;        // 0 件・失敗は []（失敗詳細はアダプタの onError）
   reverse(point: GeoPoint): Promise<PlaceCandidate | null>;
 }
 
@@ -1726,11 +1731,12 @@ interface SharedLocation {
   point: GeoPoint | null;
   name: string | null;
   kind: SharedLocationKind;
-  /** 短縮リンク（maps.app.goo.gl 等）。true のとき point は null で、アダプタが解決する */
+  /** 短縮リンク（maps.app.goo.gl 等）。true のとき point は null。**解決は行わない**（UI が座標付き形式を案内） */
   needsResolution: boolean;
 }
 function parseSharedLocation(text: string): SharedLocation | null;
 function isShortMapLink(url: string): boolean;
+function parseDeepLinkDestination(url: string): DeepLinkDestination | null; // 追加（U03/U05）
 ```
 
 ### 9.4 共通ルール
@@ -1747,5 +1753,54 @@ function isShortMapLink(url: string): boolean;
 - [ ] `npm run verify` 緑（既存 444 tests + 新規テスト）
 - [ ] 実機で F2〜F6 のフローが動作し、スクリーンショットが残っている
 - [ ] ネイティブ共有ターゲット（FR-17）は dev build 必須であることがドキュメント化されている
+
+### 9.6 実装メモ（U01〜U05 データ層・完了記録）
+
+> 実装: 2026-10-30 / implementer。`npm run verify` **33 suites / 604 tests PASS**（U05 完了時点。以降の UI タスクで増加）。
+> 追加したテストファイル: `domain/__tests__/{shareLink,placeCandidate,destinationOrder}.test.ts`、
+> `adapters/__tests__/{expoPlaceSearch,expoClipboard,expoLinking,asyncStoragePreferencesRepository}.test.ts`、
+> `hooks/__tests__/destinationPicker.test.ts`。
+
+**完了チェック**
+- [x] U01 共有リンク・テキスト解析（`8ad3276`）— `domain/shareLink.ts` / `domain/placeCandidate.ts` / `domain/destinationOrder.ts`
+- [x] U02 型・ポート拡張（`ae1a8a1`）— `Destination.favorite` / `lastUsedAtEpochMs`、新ポート 4 種、`markUsed` / `setFavorite`
+- [x] U03 Expo アダプタ（`95ff04c`）— `ExpoPlaceSearchProvider` / `ExpoClipboardProvider` / `ExpoLinkingProvider` + `parseDeepLinkDestination`
+- [x] U04 リポジトリ拡張（`e9bc395`）— 目的地ストア **v2** 移行（v1 は読み取りのみ）・お気に入り/最近の永続化
+- [x] U05 `useDestinationPicker`（`3408230`）— `hooks/destinationPickerReducer.ts`（純粋）+ `hooks/useDestinationPicker.ts`
+- [x] 追加: `AsyncStoragePreferencesRepository`（`d80aaba`）— U02 の `PreferencesRepository` の具体実装
+
+**実装上の決定（設計からの逸脱・確定事項）**
+1. **目的地ストアは v2 キーへ移行**（architecture §10.1 の「v2 へ移行し v1 は読み取りのみ」を実施）。
+   - キー: `yoridorimidori/destinations/v2`（書き込み先）/ `yoridorimidori/destinations/v1`（読み取りのみ・移行後も残置）。
+   - `codec.ts` の定数を `DESTINATIONS_SCHEMA_VERSION = 2` / `LEGACY_DESTINATIONS_SCHEMA_VERSION = 1` / `SAMPLES_SCHEMA_VERSION = 1` / `PREFERENCES_SCHEMA_VERSION = 1` に整理。
+   - `decodeDestinations` は v1・`schemaVersion` 欠落を既定値（`favorite: false` / `lastUsedAtEpochMs: null`）で補完し、`migratedFromVersion` を返す。リポジトリは v2 優先→v1 を読み成功時に v2 へ書き戻す（破損時は読んだキーを基準に quarantine）。
+   - **U14 で「v1→v2 移行後に再起動しても目的地・選択が残る」を確認する**ことを推奨。
+2. **geocode は最大 1 件前提の UX**（research §1.2）。`ExpoPlaceSearchProvider.search` は 0〜1 件の候補配列を返し、候補の `name` は検索語・`address` は `null`（geocode は座標しか返さない）。0 件は `searchResultKind === 'empty'`、失敗は `'error'`（provider は throw せず `[]`。詳細はアダプタの `onError`）。**どちらも「地図から選ぶ」へ誘導**する。複数件前提の候補リスト UI にしない。
+3. **短縮リンク（`maps.app.goo.gl` 等）は解決しない**（NFR-02 外部通信ゼロ）。`parseSharedLocation` は `{ point: null, needsResolution: true }` を返し、UI は「座標を含む形式でコピーし直してください」と案内する（`sharedBannerKind === 'needs-resolution'`）。`fetch` によるリダイレクト解決は実装しない。
+4. **`buildDestinationName` はオーバーロード**（テキスト→`string | null`、`LocationGeocodedAddress` 互換→`string`）。
+   名前が取れない場合のフォールバック **`FALLBACK_DESTINATION_NAME = '選択した地点'` は domain に配置**（文言は `ui/labels.ts` の原則の例外。Lead 決定）。UI 側で上書き可能。
+5. **`parseDeepLinkDestination` を domain/shareLink.ts に追加**（U03/U05 で必要）。`yoridorimidori://set?lat=..&lon=..&name=..` と Expo Go の `exp://.../--/set?...` に対応（UX 設計 §F6）。
+6. **`PlaceSearchProvider.search` の契約**: 「throw しない」のため戻り値では 0 件と失敗を区別しない（Lead 承認済み）。失敗詳細はアダプタの `onError`（実装詳細）で通知し、UI は空/失敗を同等に扱う。
+7. **U05 の 300ms debounce** はフック内 `setTimeout`。状態遷移・世代番号（`searchGeneration` / `mapGeneration`）による古い応答破棄・二重送信防止は**純粋 reducer** に切り出してテスト（`jest.useFakeTimers` 不使用の方針を維持）。`useDestinationPicker` は `adapters/` を import せず、ポート型のみ受け取る（具体実装は App が注入）。
+8. **`Destination` の新フィールドは required** のため、既存 fixture を更新（`domain/presets.ts`・codec・両リポジトリ・domain/adapters の各テスト）。`hooks/__tests__/navReducer.test.ts` は型追随の最小 2 行のみ修正（実装本体・`useNavApp` は未変更）。
+9. **`PreferencesRepository` の具体実装を追加**（当初タスク外・Lead 依頼）。`AsyncStoragePreferencesRepository` は未設定・破損・型不正・未知バージョンを **false（未見）**、読み書き失敗は `onWarning` のみで throw しない。
+
+**U05 のインターフェース（UI 配線用・確定）**
+```ts
+const picker = useDestinationPicker({
+  placeSearch, clipboard, deepLink,        // ポート実装（App が生成）
+  recent, favorites,                        // App 状態（domain/destinationOrder で整列・抽出）
+  currentPoint, fallbackName: '選択した地点',
+  onConfirm: (input: DestinationInput) => void, // 保存＋選択＋markUsed は App 側
+  onToggleFavorite: (id: string) => void,
+});
+// picker.state / picker.actions / picker.derived
+// actions: setQuery / clearQuery / retrySearch / checkClipboard（ユーザー操作時のみ） /
+//          dismissShared / confirmShared / selectSearchResult / selectMapPoint /
+//          confirmMapPoint / clearMapPoint / confirmCurrentLocation / toggleFavorite
+// derived: isSearchBusy / searchResultKind / sharedBannerKind / canConfirmMapPoint
+```
+
+**残タスク**: U06〜U13（UI・implementer2）、U14（実機・Lead）、U15 の最終化（実機結果の反映）。
 
 
