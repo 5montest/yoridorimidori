@@ -50,20 +50,29 @@ export function Bird({ relativeBearingDeg, arrived, size = 220 }: BirdProps): Re
 
   useEffect(() => {
     const assetDeg = relativeBearingDeg === null || arrived ? 0 : relativeBearingDeg;
-    const targetDeg = reduceContinuousAngle(
-      nextContinuousAngleDeg(continuousDegRef.current, assetDeg),
-      CONTINUOUS_ANGLE_LIMIT_DEG,
-    );
-    continuousDegRef.current = targetDeg;
+    const rawNextDeg = nextContinuousAngleDeg(continuousDegRef.current, assetDeg);
+    const targetDeg = reduceContinuousAngle(rawNextDeg, CONTINUOUS_ANGLE_LIMIT_DEG);
+
+    // `reduceContinuousAngle` が値を変えるのは 360° の倍数だけ。その分だけアニメーションの
+    // 現在値もシフトすれば見た目は変わらないため、±720° 境界でも最短経路の回転を保てる。
+    // （例: 719° + 2° → 721° を 361° に丸める際、基準を -360° して 359° → 361° の +2° にする）
+    // 回転方向の符号とあわせて D2（実機目視）で最終確認する（§18-2 / §18-3）。
+    const shiftDeg = targetDeg - rawNextDeg;
+    if (shiftDeg !== 0) {
+      angle.setValue(continuousDegRef.current + shiftDeg);
+      continuousDegRef.current += shiftDeg;
+    }
 
     if (!mountedRef.current) {
       // 初回はアニメーションせず即時表示（§9.3）。
       mountedRef.current = true;
       animationRef.current = null;
+      continuousDegRef.current = targetDeg;
       angle.setValue(targetDeg);
       return;
     }
 
+    continuousDegRef.current = targetDeg;
     const animation = Animated.timing(angle, {
       toValue: targetDeg,
       duration: ROTATION_DURATION_MS,
