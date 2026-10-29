@@ -6,7 +6,7 @@ import {
   UI_TEXT,
   relativeDirectionCaption,
 } from '../labels';
-import { COLORS, FONT_SIZE, RADIUS, SPACING, TONE_COLORS } from '../theme';
+import { COLORS, FONT_SIZE, RADIUS, SCREEN_BOTTOM_PADDING, SPACING, TONE_COLORS } from '../theme';
 import { Bird } from '../components/Bird';
 import { NavStatusPanel } from '../components/NavStatusPanel';
 
@@ -27,6 +27,7 @@ export interface MainScreenProps {
   readonly permissionNotice?: ReactNode;
   readonly onChangeDestination: () => void;
   readonly onOpenDestinations: () => void;
+  readonly onOpenMap: () => void;
   readonly onOpenDevLog: () => void;
   readonly onToggleMock: () => void;
 }
@@ -49,6 +50,7 @@ export function MainScreen({
   permissionNotice,
   onChangeDestination,
   onOpenDestinations,
+  onOpenMap,
   onOpenDevLog,
   onToggleMock,
 }: MainScreenProps): ReactElement {
@@ -105,6 +107,13 @@ export function MainScreen({
           >
             <Text style={styles.buttonText}>{UI_TEXT.main.openDestinations}</Text>
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenMap}
+            style={({ pressed }) => [styles.button, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.buttonText}>{UI_TEXT.main.openMap}</Text>
+          </Pressable>
           {devToolsVisible ? (
             <>
               <Pressable
@@ -144,6 +153,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     padding: SPACING.md,
+    paddingBottom: SCREEN_BOTTOM_PADDING,
     gap: SPACING.md,
   },
   header: {

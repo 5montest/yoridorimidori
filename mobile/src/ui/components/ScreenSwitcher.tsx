@@ -16,10 +16,13 @@ export interface ScreenSwitcherProps {
   readonly children: ReactNode;
 }
 
-/** タブが現在の画面を表しているか（追加画面は目的地タブに属する）。 */
+/** タブが現在の画面を表しているか（追加画面は目的地タブ、地図はナビタブに属する）。 */
 function isActiveTab(screen: ScreenId, tab: ScreenId): boolean {
   if (tab === 'destinations') {
     return screen === 'destinations' || screen === 'add';
+  }
+  if (tab === 'main') {
+    return screen === 'main' || screen === 'map';
   }
   return screen === tab;
 }

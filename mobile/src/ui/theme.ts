@@ -60,6 +60,22 @@ export const RADIUS = {
   pill: 999,
 } as const;
 
+/**
+ * Android のステータスバー高さ（`StatusBar.currentHeight`）を安全な上端 inset に変換する。
+ *
+ * `react-native-safe-area-context` は追加依存のため使わない（付録A）。Android 先行のため
+ * iOS など高さが取得できない環境では 0（ステータスバーとの重なりは D 系で確認）。
+ */
+export function statusBarTopInset(statusBarHeight: number | null | undefined): number {
+  if (typeof statusBarHeight !== 'number' || !Number.isFinite(statusBarHeight)) {
+    return 0;
+  }
+  return statusBarHeight > 0 ? statusBarHeight : 0;
+}
+
+/** 画面下端の余白（タブバーとアクション行の近接を緩和する）。 */
+export const SCREEN_BOTTOM_PADDING = SPACING.xl;
+
 /** GPS 精度区分 → 区分色。 */
 export function gpsAccuracyColor(accuracyClass: GpsAccuracyClass): string {
   return TONE_COLORS[accuracyClass];

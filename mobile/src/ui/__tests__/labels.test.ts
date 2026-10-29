@@ -72,7 +72,7 @@ const VALIDATION_ERROR_KEYS: readonly ValidationErrorKey[] = [
   'point-invalid',
 ];
 
-const SCREENS: readonly ScreenId[] = ['main', 'destinations', 'add', 'dev'];
+const SCREENS: readonly ScreenId[] = ['main', 'destinations', 'add', 'dev', 'map'];
 
 /** 全て非空文字列であることを表明する。 */
 function expectNonEmpty(label: string): void {

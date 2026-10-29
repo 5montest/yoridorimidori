@@ -10,8 +10,8 @@ import { formatAgeMs } from '../domain/format';
 import { normalizeSignedDegrees } from '../domain/normalize';
 import type { ValidationResult } from '../domain/validation';
 
-/** 画面 ID（UI 内の自前遷移。ADR-07）。`'map'` は T27 で追加する。 */
-export type ScreenId = 'main' | 'destinations' | 'add' | 'dev';
+/** 画面 ID（UI 内の自前遷移。ADR-07）。 */
+export type ScreenId = 'main' | 'destinations' | 'add' | 'dev' | 'map';
 
 /** 目的地入力の検証エラーキー（domain の `ValidationResult.errorKey` を単一の源にする）。 */
 export type ValidationErrorKey = NonNullable<ValidationResult<unknown>['errorKey']>;
@@ -233,6 +233,8 @@ export function screenLabel(screen: ScreenId): string {
       return '目的地を追加';
     case 'dev':
       return '記録';
+    case 'map':
+      return '地図';
   }
 }
 
@@ -307,6 +309,7 @@ export const UI_TEXT = {
     warningsLabel: '警告',
     openDestinations: '目的地',
     openDevLog: '記録',
+    openMap: '地図',
     mockOn: 'Mock: ON',
     mockOff: 'Mock: OFF',
   },
@@ -410,5 +413,21 @@ export const UI_TEXT = {
   /** 画面切替 */
   screenSwitcher: {
     current: '表示中',
+  },
+  /** 地図画面（native / web フォールバック共通） */
+  mapScreen: {
+    title: '地図',
+    back: 'ナビに戻る',
+    webFallback: '地図はこのプラットフォームでは表示できません',
+    apiKeyNote: '地図が表示されない場合は Google Maps API キーが未設定です',
+    noLocation: '現在地が取得できていないため地図を表示できません',
+    noDestination: '目的地が選択されていません',
+    currentLocationMarker: '現在地',
+    destinationMarker: '目的地',
+    destinationLabel: '目的地',
+    distanceLabel: '距離',
+    relativeBearingLabel: '相対方位',
+    locationLabel: '現在地',
+    coordinatesLabel: '座標',
   },
 } as const;

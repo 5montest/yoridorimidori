@@ -1,6 +1,6 @@
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StatusBar as NativeStatusBar, StyleSheet, View } from 'react-native';
 import { SystemClock } from './src/adapters/clock/SystemClock';
 import { ExpoHeadingProvider } from './src/adapters/expo/ExpoHeadingProvider';
 import { ExpoLocationProvider } from './src/adapters/expo/ExpoLocationProvider';
@@ -22,7 +22,8 @@ import { DestinationAddScreen } from './src/ui/screens/DestinationAddScreen';
 import { DestinationListScreen } from './src/ui/screens/DestinationListScreen';
 import { DevLogScreen } from './src/ui/screens/DevLogScreen';
 import { MainScreen } from './src/ui/screens/MainScreen';
-import { COLORS } from './src/ui/theme';
+import { MapScreen } from './src/ui/screens/MapScreen';
+import { COLORS, statusBarTopInset } from './src/ui/theme';
 
 /** Mock センサーを駆動するティッカーの間隔（ms）。実センサーの更新頻度に合わせる。 */
 const MOCK_TICKER_INTERVAL_MS = 100;
@@ -98,6 +99,8 @@ export default function App(): ReactElement {
   const { state, nav, actions } = useNavApp(runtime.deps);
   const selectedDestination = selectSelectedDestination(state);
   const devToolsVisible = state.devToolsVisible;
+  // ステータスバー（時刻・バッテリー）との重なりを避ける。safe-area-context は追加しない。
+  const statusBarPaddingTop = statusBarTopInset(NativeStatusBar.currentHeight);
 
   // Mock モードの間だけ Mock センサーの時計を進める（開発ビルドのみ有効）。
   useEffect(() => {
@@ -178,6 +181,18 @@ export default function App(): ReactElement {
         onBack={() => setScreen('main')}
       />
     );
+  } else if (screen === 'map') {
+    content = (
+      <ErrorBoundary onReturnToMain={() => setScreen('main')}>
+        <MapScreen
+          currentPoint={state.location?.point ?? null}
+          destinationName={selectedDestination?.name ?? null}
+          destinationPoint={selectedDestination?.point ?? null}
+          nav={nav}
+          onBack={() => setScreen('main')}
+        />
+      </ErrorBoundary>
+    );
   } else {
     content = (
       <ErrorBoundary onReturnToMain={() => setScreen('main')}>
@@ -191,6 +206,7 @@ export default function App(): ReactElement {
           permissionNotice={permissionNotice}
           onChangeDestination={() => setScreen('destinations')}
           onOpenDestinations={() => setScreen('destinations')}
+          onOpenMap={() => setScreen('map')}
           onOpenDevLog={() => setScreen('dev')}
           onToggleMock={() => actions.toggleMockMode()}
         />
@@ -199,8 +215,8 @@ export default function App(): ReactElement {
   }
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="dark" />
+    <View style={[styles.root, { paddingTop: statusBarPaddingTop }]}>
+      <ExpoStatusBar style="dark" />
       <ScreenSwitcher screen={screen} onChange={setScreen} devToolsVisible={devToolsVisible}>
         {content}
       </ScreenSwitcher>
