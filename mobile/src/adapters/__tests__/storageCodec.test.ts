@@ -1,7 +1,9 @@
 import {
+  DESTINATIONS_SCHEMA_VERSION,
+  LEGACY_DESTINATIONS_SCHEMA_VERSION,
   SAMPLES_CHAR_BUDGET,
   SAMPLES_FALLBACK_KEEP_COUNT,
-  SCHEMA_VERSION,
+  SAMPLES_SCHEMA_VERSION,
   decodeDestinations,
   decodeSamples,
   encodeDestinations,
@@ -11,13 +13,14 @@ import {
 } from '../storage/codec';
 import {
   DESTINATIONS_STORAGE_KEY,
+  DESTINATIONS_STORAGE_KEY_V1,
   QUARANTINE_KEY_PREFIX,
   SAMPLES_STORAGE_KEY,
   quarantineKeyFor,
 } from '../storage/storageKeys';
 import type { Destination, SampleLogEntry } from '../../domain/types';
 
-function expectOk<T>(result: DecodeResult<T>): { readonly value: T; readonly droppedCount: number } {
+function expectOk<T>(result: DecodeResult<T>): Extract<DecodeResult<T>, { readonly ok: true }> {
   if (!result.ok) {
     throw new Error(`expected ok but got ${result.reason}`);
   }
@@ -53,20 +56,23 @@ function makeSample(overrides: Partial<SampleLogEntry> = {}): SampleLogEntry {
 }
 
 describe('storageKeys — §10.1', () => {
-  it('キー文字列は v1 を含み、§10.1 のとおり', () => {
-    expect(DESTINATIONS_STORAGE_KEY).toBe('yoridorimidori/destinations/v1');
+  it('目的地は v2・サンプルは v1・v1 キーは移行用（読み取りのみ）', () => {
+    expect(DESTINATIONS_STORAGE_KEY).toBe('yoridorimidori/destinations/v2');
+    expect(DESTINATIONS_STORAGE_KEY_V1).toBe('yoridorimidori/destinations/v1');
     expect(SAMPLES_STORAGE_KEY).toBe('yoridorimidori/samples/v1');
     expect(QUARANTINE_KEY_PREFIX).toBe('yoridorimidori/quarantine/');
   });
 
   it('退避キーは <prefix><storageKey>/<epochMs>', () => {
     expect(quarantineKeyFor(DESTINATIONS_STORAGE_KEY, 1_700_000_000_000)).toBe(
-      'yoridorimidori/quarantine/yoridorimidori/destinations/v1/1700000000000',
+      'yoridorimidori/quarantine/yoridorimidori/destinations/v2/1700000000000',
     );
   });
 
-  it('スキーマバージョン 1・サイズ防御の既定値', () => {
-    expect(SCHEMA_VERSION).toBe(1);
+  it('スキーマバージョン（目的地 v2 / 旧 v1 / サンプル v1）・サイズ防御の既定値', () => {
+    expect(DESTINATIONS_SCHEMA_VERSION).toBe(2);
+    expect(LEGACY_DESTINATIONS_SCHEMA_VERSION).toBe(1);
+    expect(SAMPLES_SCHEMA_VERSION).toBe(1);
     expect(SAMPLES_CHAR_BUDGET).toBe(200_000);
     expect(SAMPLES_FALLBACK_KEEP_COUNT).toBe(150);
   });
@@ -93,15 +99,23 @@ describe('encode / decode ラウンドトリップ', () => {
     expect(decoded.droppedCount).toBe(0);
   });
 
-  it('encode した JSON は schemaVersion を含む', () => {
+  it('favorite / lastUsedAtEpochMs もラウンドトリップする（v2）', () => {
+    const item = makeDestination({ favorite: true, lastUsedAtEpochMs: 1_700_000_123_456 });
+    const decoded = expectOk(decodeDestinations(encodeDestinations([item], item.id)));
+    expect(decoded.value.items[0]).toEqual(item);
+    expect(decoded.value.selectedId).toBe(item.id);
+    expect(decoded.migratedFromVersion).toBeUndefined();
+  });
+
+  it('encode した JSON は schemaVersion を含む（目的地 v2・サンプル v1）', () => {
     const parsed = JSON.parse(encodeDestinations([makeDestination()], null)) as Record<
       string,
       unknown
     >;
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(DESTINATIONS_SCHEMA_VERSION);
     expect(Array.isArray(parsed.items)).toBe(true);
     const samples = JSON.parse(encodeSamples([makeSample()])) as Record<string, unknown>;
-    expect(samples.schemaVersion).toBe(1);
+    expect(samples.schemaVersion).toBe(SAMPLES_SCHEMA_VERSION);
   });
 });
 
@@ -134,8 +148,8 @@ describe('decodeDestinations — 破損・形状', () => {
     }
   });
 
-  it('schemaVersion 未知（2）は future-version・上書きしない', () => {
-    const raw = JSON.stringify({ schemaVersion: 2, items: [] });
+  it('schemaVersion 未知（3）は future-version・上書きしない', () => {
+    const raw = JSON.stringify({ schemaVersion: 3, items: [] });
     const result = decodeDestinations(raw);
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -144,11 +158,23 @@ describe('decodeDestinations — 破損・形状', () => {
     }
   });
 
-  it('schemaVersion 欠落は v1 として読む', () => {
+  it('schemaVersion 2（現行）は移行なしで読む', () => {
+    const raw = JSON.stringify({
+      schemaVersion: 2,
+      items: [makeDestination({ favorite: true })],
+      selectedId: null,
+    });
+    const decoded = expectOk(decodeDestinations(raw));
+    expect(decoded.migratedFromVersion).toBeUndefined();
+    expect(decoded.value.items[0]?.favorite).toBe(true);
+  });
+
+  it('schemaVersion 欠落は v1 として読み、既定値で補完する', () => {
     const raw = JSON.stringify({ items: [makeDestination()], selectedId: 'dest-1' });
     const decoded = expectOk(decodeDestinations(raw));
     expect(decoded.value.items).toHaveLength(1);
     expect(decoded.value.selectedId).toBe('dest-1');
+    expect(decoded.migratedFromVersion).toBe(LEGACY_DESTINATIONS_SCHEMA_VERSION);
   });
 
   it('schemaVersion が 0 / 文字列なら shape', () => {
@@ -159,6 +185,51 @@ describe('decodeDestinations — 破損・形状', () => {
         expect(result.reason).toBe('shape');
       }
     }
+  });
+});
+
+describe('decodeDestinations — v1 → v2 移行（Phase 4 / U04）', () => {
+  const V1_ITEM = {
+    id: 'dest-v1',
+    name: '東京駅',
+    point: { latitude: 35.681236, longitude: 139.767125 },
+    createdAtEpochMs: 1_700_000_000_000,
+    origin: 'manual',
+  };
+
+  it('v1 データは favorite:false / lastUsedAtEpochMs:null で補完し migratedFromVersion=1 を返す', () => {
+    const raw = JSON.stringify({ schemaVersion: 1, items: [V1_ITEM], selectedId: 'dest-v1' });
+    const decoded = expectOk(decodeDestinations(raw));
+    expect(decoded.migratedFromVersion).toBe(LEGACY_DESTINATIONS_SCHEMA_VERSION);
+    expect(decoded.value.items[0]).toEqual({
+      ...V1_ITEM,
+      favorite: false,
+      lastUsedAtEpochMs: null,
+    });
+    expect(decoded.value.selectedId).toBe('dest-v1');
+  });
+
+  it('v1 要素の favorite / lastUsedAtEpochMs が型不正なら既定値に倒す（要素は捨てない）', () => {
+    const raw = JSON.stringify({
+      schemaVersion: 1,
+      items: [{ ...V1_ITEM, favorite: 'yes', lastUsedAtEpochMs: 'yesterday' }],
+      selectedId: null,
+    });
+    const decoded = expectOk(decodeDestinations(raw));
+    expect(decoded.droppedCount).toBe(0);
+    expect(decoded.value.items[0]?.favorite).toBe(false);
+    expect(decoded.value.items[0]?.lastUsedAtEpochMs).toBeNull();
+  });
+
+  it('v1 の座標不正は従来どおり読み飛ばす（droppedCount）', () => {
+    const raw = JSON.stringify({
+      schemaVersion: 1,
+      items: [{ ...V1_ITEM, point: { latitude: 91, longitude: 0 } }],
+      selectedId: null,
+    });
+    const decoded = expectOk(decodeDestinations(raw));
+    expect(decoded.value.items).toEqual([]);
+    expect(decoded.droppedCount).toBe(1);
   });
 });
 

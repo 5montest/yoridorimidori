@@ -9,6 +9,7 @@ import {
 import { encodeDestinations, encodeSamples } from '../storage/codec';
 import {
   DESTINATIONS_STORAGE_KEY,
+  DESTINATIONS_STORAGE_KEY_V1,
   SAMPLES_STORAGE_KEY,
   quarantineKeyFor,
 } from '../storage/storageKeys';
@@ -133,11 +134,96 @@ describe('AsyncStorageDestinationRepository — CRUD と永続化', () => {
   it('selectedId が壊れている（存在しない id）なら null に補正される', async () => {
     await AsyncStorage.setItem(
       DESTINATIONS_STORAGE_KEY,
-      JSON.stringify({ schemaVersion: 1, items: [makeDestination()], selectedId: 'missing' }),
+      JSON.stringify({ schemaVersion: 2, items: [makeDestination()], selectedId: 'missing' }),
     );
     const clock = new FakeClock(0, EPOCH);
     const repository = new AsyncStorageDestinationRepository(clock, makeIdFactory());
     await expect(repository.readSelection()).resolves.toBeNull();
+  });
+});
+
+describe('AsyncStorageDestinationRepository — Phase 4（favorite / lastUsedAt / v1→v2）', () => {
+  it('markUsed は永続化され、新しいインスタンスでも lastUsedAtEpochMs が読める', async () => {
+    const clock = new FakeClock(0, EPOCH);
+    const ids = makeIdFactory();
+    const repository = new AsyncStorageDestinationRepository(clock, ids);
+    const created = await repository.add({ name: '東京駅', point: TOKYO, origin: 'manual' });
+    expect(created.lastUsedAtEpochMs).toBeNull();
+
+    clock.advance(5_000);
+    await repository.markUsed(created.id);
+
+    const reopened = new AsyncStorageDestinationRepository(clock, ids);
+    const [item] = await reopened.list();
+    expect(item?.lastUsedAtEpochMs).toBe(EPOCH + 5_000);
+  });
+
+  it('setFavorite は永続化され、存在しない id は無視される', async () => {
+    const clock = new FakeClock(0, EPOCH);
+    const ids = makeIdFactory();
+    const repository = new AsyncStorageDestinationRepository(clock, ids);
+    const created = await repository.add({ name: '東京駅', point: TOKYO, origin: 'manual' });
+
+    await repository.setFavorite(created.id, true);
+    const reopened = new AsyncStorageDestinationRepository(clock, ids);
+    expect((await reopened.list())[0]?.favorite).toBe(true);
+
+    await repository.setFavorite(created.id, false);
+    expect((await reopened.list())[0]?.favorite).toBe(false);
+
+    // 存在しない id は throw せず無視
+    await expect(repository.markUsed('missing')).resolves.toBeUndefined();
+    await expect(repository.setFavorite('missing', true)).resolves.toBeUndefined();
+    await expect(reopened.list()).resolves.toHaveLength(1);
+  });
+
+  it('v1 データを読み込むと既定値で補完し、v2 キーへ移行する（v1 は読み取りのみ）', async () => {
+    const legacyItem = {
+      id: 'legacy-1',
+      name: '東京駅',
+      point: TOKYO,
+      createdAtEpochMs: EPOCH,
+      origin: 'manual',
+    };
+    const legacyRaw = JSON.stringify({
+      schemaVersion: 1,
+      items: [legacyItem],
+      selectedId: 'legacy-1',
+    });
+    await AsyncStorage.setItem(DESTINATIONS_STORAGE_KEY_V1, legacyRaw);
+
+    const clock = new FakeClock(0, EPOCH);
+    const repository = new AsyncStorageDestinationRepository(clock, makeIdFactory());
+    const items = await repository.list();
+    expect(items).toEqual([{ ...legacyItem, favorite: false, lastUsedAtEpochMs: null }]);
+    await expect(repository.readSelection()).resolves.toBe('legacy-1');
+
+    const migratedRaw = await AsyncStorage.getItem(DESTINATIONS_STORAGE_KEY);
+    expect(migratedRaw).not.toBeNull();
+    const migrated = migratedRaw === null ? null : (JSON.parse(migratedRaw) as Record<string, unknown>);
+    expect(migrated?.schemaVersion).toBe(2);
+    // v1 キーは読み取りのみで残す（上書き・削除しない）
+    await expect(AsyncStorage.getItem(DESTINATIONS_STORAGE_KEY_V1)).resolves.toBe(legacyRaw);
+  });
+
+  it('破損した v1 データは退避し、v2 を初期化する（クラッシュしない）', async () => {
+    const clock = new FakeClock(0, EPOCH);
+    await AsyncStorage.setItem(DESTINATIONS_STORAGE_KEY_V1, '{broken v1');
+    const warnings: string[] = [];
+    const repository = new AsyncStorageDestinationRepository(clock, makeIdFactory(), (message) =>
+      warnings.push(message),
+    );
+
+    await expect(repository.list()).resolves.toEqual([]);
+    expect(warnings).toHaveLength(1);
+    await expect(
+      AsyncStorage.getItem(quarantineKeyFor(DESTINATIONS_STORAGE_KEY_V1, clock.nowEpochMs())),
+    ).resolves.toBe('{broken v1');
+
+    const initializedRaw = await AsyncStorage.getItem(DESTINATIONS_STORAGE_KEY);
+    const initialized =
+      initializedRaw === null ? null : (JSON.parse(initializedRaw) as Record<string, unknown>);
+    expect(initialized?.schemaVersion).toBe(2);
   });
 });
 

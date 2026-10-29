@@ -17,10 +17,19 @@ import { isValidLatitude, isValidLongitude } from '../../domain/validation';
  * - 要素単位の検証で、型不正・座標範囲外の要素だけを読み飛ばす（`droppedCount`）。
  * - 重複 `id` は**先勝ち**。`selectedId` が items に無ければ `null` に補正。
  * - 未知フィールドは無視（前方互換）。`schemaVersion` 欠落は v1 として読む。
+ * - **目的地ストアは v1 → v2 の移行を decode 内で行う**（Phase 4 / U04）:
+ *   旧データ（`favorite` / `lastUsedAtEpochMs` なし）は既定値（`false` / `null`）で補完し、
+ *   `migratedFromVersion` を返す（呼び出し側が v2 へ書き戻す判断に使う）。
  */
 
-/** 現行スキーマバージョン。 */
-export const SCHEMA_VERSION = 1;
+/** 目的地ストアの現行スキーマバージョン（v2 で favorite / lastUsedAtEpochMs を追加）。 */
+export const DESTINATIONS_SCHEMA_VERSION = 2;
+
+/** 目的地ストアの旧スキーマバージョン（移行元）。 */
+export const LEGACY_DESTINATIONS_SCHEMA_VERSION = 1;
+
+/** サンプルストアの現行スキーマバージョン（変更なし）。 */
+export const SAMPLES_SCHEMA_VERSION = 1;
 
 /** サンプルの文字列長がこれを超えたら縮小保存する（§10.5。Android の 1 エントリ約 2 MB 対策）。 */
 export const SAMPLES_CHAR_BUDGET = 200_000;
@@ -35,7 +44,13 @@ export type DecodeFailureReason = 'parse' | 'shape' | 'future-version';
 
 /** decode の結果。`ok: false` のときは生文字列（退避用）も返す。 */
 export type DecodeResult<T> =
-  | { readonly ok: true; readonly value: T; readonly droppedCount: number }
+  | {
+      readonly ok: true;
+      readonly value: T;
+      readonly droppedCount: number;
+      /** 旧スキーマから読み替えた場合の元バージョン（書き戻しの判断に使う）。 */
+      readonly migratedFromVersion?: number;
+    }
   | { readonly ok: false; readonly reason: DecodeFailureReason; readonly raw: string };
 
 /** 目的地ストアの値。 */
@@ -54,17 +69,17 @@ export function encodeDestinations(
   items: readonly Destination[],
   selectedId: string | null,
 ): string {
-  return JSON.stringify({ schemaVersion: SCHEMA_VERSION, items, selectedId });
+  return JSON.stringify({ schemaVersion: DESTINATIONS_SCHEMA_VERSION, items, selectedId });
 }
 
 /** サンプルストアを JSON 化する（古い順の配列をそのまま書く）。 */
 export function encodeSamples(items: readonly SampleLogEntry[]): string {
-  return JSON.stringify({ schemaVersion: SCHEMA_VERSION, items });
+  return JSON.stringify({ schemaVersion: SAMPLES_SCHEMA_VERSION, items });
 }
 
-/** 目的地ストアを復号する。破損・型不正でも throw しない。 */
+/** 目的地ストアを復号する。破損・型不正でも throw しない（v1 は v2 に読み替える）。 */
 export function decodeDestinations(raw: string): DecodeResult<DestinationStoreValue> {
-  const envelope = parseEnvelope(raw);
+  const envelope = parseEnvelope(raw, DESTINATIONS_SCHEMA_VERSION);
   if (!envelope.ok) {
     return envelope;
   }
@@ -90,7 +105,10 @@ export function decodeDestinations(raw: string): DecodeResult<DestinationStoreVa
   const selectedId =
     typeof rawSelectedId === 'string' && seenIds.has(rawSelectedId) ? rawSelectedId : null;
 
-  return { ok: true, value: { items, selectedId }, droppedCount };
+  const value: DestinationStoreValue = { items, selectedId };
+  return envelope.version < DESTINATIONS_SCHEMA_VERSION
+    ? { ok: true, value, droppedCount, migratedFromVersion: envelope.version }
+    : { ok: true, value, droppedCount };
 }
 
 /**
@@ -102,7 +120,7 @@ export function decodeSamples(
   raw: string,
   capacity: number = DEFAULT_THRESHOLDS.sampleLogCapacity,
 ): DecodeResult<SampleStoreValue> {
-  const envelope = parseEnvelope(raw);
+  const envelope = parseEnvelope(raw, SAMPLES_SCHEMA_VERSION);
   if (!envelope.ok) {
     return envelope;
   }
@@ -154,11 +172,19 @@ export function trimSamplesToCharBudget(
 // ── 内部ヘルパー ───────────────────────────────────────────────────────────
 
 type EnvelopeResult =
-  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | {
+      readonly ok: true;
+      readonly value: Record<string, unknown>;
+      /** 実データのスキーマバージョン（欠落は v1 とみなす）。 */
+      readonly version: number;
+    }
   | { readonly ok: false; readonly reason: DecodeFailureReason; readonly raw: string };
 
-/** ルートの JSON を解析し schemaVersion を検査する（欠落は v1 とみなす）。 */
-function parseEnvelope(raw: string): EnvelopeResult {
+/**
+ * ルートの JSON を解析し schemaVersion を検査する。
+ * 欠落は v1（旧形式）とみなし、`currentVersion` 以下の旧バージョンは移行対象として受け入れる。
+ */
+function parseEnvelope(raw: string, currentVersion: number): EnvelopeResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -168,20 +194,15 @@ function parseEnvelope(raw: string): EnvelopeResult {
   if (!isRecord(parsed)) {
     return { ok: false, reason: 'shape', raw };
   }
-  const version = parsed.schemaVersion;
-  if (version === undefined || version === null) {
-    return { ok: true, value: parsed }; // 欠落は v1 として読む（防御的）
-  }
+  const rawVersion = parsed.schemaVersion;
+  const version = rawVersion === undefined || rawVersion === null ? 1 : rawVersion; // 欠落は v1
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
     return { ok: false, reason: 'shape', raw };
   }
-  if (version > SCHEMA_VERSION) {
+  if (version > currentVersion) {
     return { ok: false, reason: 'future-version', raw }; // 将来バージョンは上書きしない
   }
-  if (version < SCHEMA_VERSION) {
-    return { ok: false, reason: 'shape', raw }; // 未知の旧バージョン
-  }
-  return { ok: true, value: parsed };
+  return { ok: true, value: parsed, version };
 }
 
 function decodeDestination(value: unknown): Destination | null {

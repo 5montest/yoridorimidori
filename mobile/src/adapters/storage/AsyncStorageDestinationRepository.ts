@@ -7,7 +7,11 @@ import type {
 import { validateDestinationInput } from '../../domain/validation';
 import type { Clock } from '../../ports/clock';
 import type { DestinationRepository } from '../../ports/destinationRepository';
-import { DESTINATIONS_STORAGE_KEY, quarantineKeyFor } from './storageKeys';
+import {
+  DESTINATIONS_STORAGE_KEY,
+  DESTINATIONS_STORAGE_KEY_V1,
+  quarantineKeyFor,
+} from './storageKeys';
 import {
   decodeDestinations,
   encodeDestinations,
@@ -162,13 +166,44 @@ export class AsyncStorageDestinationRepository implements DestinationRepository 
   }
 
   private async readStore(): Promise<DestinationStoreValue> {
-    const raw = await AsyncStorage.getItem(DESTINATIONS_STORAGE_KEY);
-    if (raw === null) {
+    // 現行キー（v2）を優先する。
+    const currentRaw = await AsyncStorage.getItem(DESTINATIONS_STORAGE_KEY);
+    if (currentRaw !== null) {
+      return this.consumeStore(currentRaw, DESTINATIONS_STORAGE_KEY, true);
+    }
+    // v2 が無ければ v1（読み取りのみ）から移行する（Phase 4 / U04）。
+    const legacyRaw = await AsyncStorage.getItem(DESTINATIONS_STORAGE_KEY_V1);
+    if (legacyRaw === null) {
       return { items: [], selectedId: null };
     }
+    const store = await this.consumeStore(
+      legacyRaw,
+      DESTINATIONS_STORAGE_KEY_V1,
+      false, // 書き戻しは下で v2 キーに対して 1 回だけ行う
+    );
+    try {
+      await AsyncStorage.setItem(
+        DESTINATIONS_STORAGE_KEY,
+        encodeDestinations(store.items, store.selectedId),
+      );
+    } catch {
+      this.onWarning('目的地データの移行（v1 → v2）の保存に失敗しました');
+    }
+    return store;
+  }
+
+  /**
+   * 生 JSON を復号する。破損時は `sourceKey` を基準に退避して初期化する。
+   * `writeBackMigration` が true で旧スキーマだった場合は v2 形式で書き戻す。
+   */
+  private async consumeStore(
+    raw: string,
+    sourceKey: string,
+    writeBackMigration: boolean,
+  ): Promise<DestinationStoreValue> {
     const decoded = decodeDestinations(raw);
     if (!decoded.ok) {
-      await this.quarantine(raw);
+      await this.quarantine(raw, sourceKey);
       this.onWarning(
         `保存済みの目的地データが壊れていたため初期化しました（理由: ${decoded.reason}）`,
       );
@@ -178,6 +213,16 @@ export class AsyncStorageDestinationRepository implements DestinationRepository 
       this.onWarning(
         `保存済み目的地のうち ${decoded.droppedCount} 件を読み飛ばしました`,
       );
+    }
+    if (writeBackMigration && decoded.migratedFromVersion !== undefined) {
+      try {
+        await AsyncStorage.setItem(
+          DESTINATIONS_STORAGE_KEY,
+          encodeDestinations(decoded.value.items, decoded.value.selectedId),
+        );
+      } catch {
+        this.onWarning('目的地データの v2 移行（書き戻し）に失敗しました');
+      }
     }
     return decoded.value;
   }
@@ -195,10 +240,10 @@ export class AsyncStorageDestinationRepository implements DestinationRepository 
   }
 
   /** 破損した生文字列を 1 件だけ退避する（退避失敗は無視して初期化を優先）。 */
-  private async quarantine(raw: string): Promise<void> {
+  private async quarantine(raw: string, sourceKey: string): Promise<void> {
     try {
       await AsyncStorage.setItem(
-        quarantineKeyFor(DESTINATIONS_STORAGE_KEY, this.clock.nowEpochMs()),
+        quarantineKeyFor(sourceKey, this.clock.nowEpochMs()),
         raw,
       );
     } catch {

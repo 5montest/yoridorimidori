@@ -112,6 +112,49 @@ describe('InMemoryDestinationRepository', () => {
     ).rejects.toThrow('invalid destination input');
     await expect(repository.list()).resolves.toEqual([]);
   });
+
+  it('markUsed は注入 Clock の時刻で lastUsedAtEpochMs を更新する', async () => {
+    const clock = new FakeClock(0, 1_000);
+    const repository = new InMemoryDestinationRepository(clock, makeIdFactory().next);
+    const created = await repository.add({ name: 'A', point: TOKYO, origin: 'manual' });
+    expect(created.lastUsedAtEpochMs).toBeNull();
+
+    clock.advance(5_000);
+    await repository.markUsed(created.id);
+    const [updated] = await repository.list();
+    expect(updated?.lastUsedAtEpochMs).toBe(6_000);
+
+    // 2 回目は新しい時刻で上書き
+    clock.advance(1_000);
+    await repository.markUsed(created.id);
+    const [latest] = await repository.list();
+    expect(latest?.lastUsedAtEpochMs).toBe(7_000);
+  });
+
+  it('markUsed / setFavorite は存在しない id を無視する（throw しない）', async () => {
+    const repository = new InMemoryDestinationRepository(new FakeClock(), makeIdFactory().next);
+    const created = await repository.add({ name: 'A', point: TOKYO, origin: 'manual' });
+    await expect(repository.markUsed('missing')).resolves.toBeUndefined();
+    await expect(repository.setFavorite('missing', true)).resolves.toBeUndefined();
+    const [unchanged] = await repository.list();
+    expect(unchanged).toEqual(created);
+  });
+
+  it('setFavorite を切り替えられる', async () => {
+    const repository = new InMemoryDestinationRepository(new FakeClock(), makeIdFactory().next);
+    const first = await repository.add({ name: 'A', point: TOKYO, origin: 'manual' });
+    const second = await repository.add({ name: 'B', point: SHINJUKU, origin: 'manual' });
+
+    await repository.setFavorite(first.id, true);
+    let list = await repository.list();
+    expect(list.map((item) => item.favorite)).toEqual([true, false]);
+
+    await repository.setFavorite(first.id, false);
+    await repository.setFavorite(second.id, true);
+    list = await repository.list();
+    expect(list.map((item) => item.favorite)).toEqual([false, true]);
+    expect(list[0]?.lastUsedAtEpochMs).toBeNull();
+  });
 });
 
 describe('InMemorySampleLogRepository', () => {
