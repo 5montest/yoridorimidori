@@ -33,3 +33,7 @@ Thumbs.db
 .env.*.local
 google-services.json
 !google-services.example.json
+
+# テストカバレッジ出力
+mobile/coverage/
+
