@@ -11,18 +11,20 @@ import { startMockTicker } from './src/adapters/mock/mockTicker';
 import { AsyncStorageDestinationRepository } from './src/adapters/storage/AsyncStorageDestinationRepository';
 import { AsyncStorageSampleLogRepository } from './src/adapters/storage/AsyncStorageSampleLogRepository';
 import { DEFAULT_THRESHOLDS } from './src/domain/constants';
+import { filterFavorites, recentDestinations } from './src/domain/destinationOrder';
 import type { GeoPoint } from './src/domain/types';
 import { selectSelectedDestination } from './src/hooks/selectors';
 import { useNavApp, type NavAppDeps } from './src/hooks/useNavApp';
 import type { MockSensorController } from './src/ports/mockSensor';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { ScreenSwitcher } from './src/ui/components/ScreenSwitcher';
-import { UI_TEXT, type ScreenId } from './src/ui/labels';
+import { UI_TEXT, type ScreenId, type SearchStatus } from './src/ui/labels';
 import { DestinationAddScreen } from './src/ui/screens/DestinationAddScreen';
-import { DestinationListScreen } from './src/ui/screens/DestinationListScreen';
+import { DestinationPickerScreen } from './src/ui/screens/DestinationPickerScreen';
 import { DevLogScreen } from './src/ui/screens/DevLogScreen';
 import { MainScreen } from './src/ui/screens/MainScreen';
 import { MapScreen } from './src/ui/screens/MapScreen';
+import { SearchResultsScreen } from './src/ui/screens/SearchResultsScreen';
 import { COLORS, statusBarTopInset } from './src/ui/theme';
 
 /** Mock センサーを駆動するティッカーの間隔（ms）。実センサーの更新頻度に合わせる。 */
@@ -98,6 +100,9 @@ export default function App(): ReactElement {
   /** 地図で選んだ地点（S4）。場所名は U05（逆ジオコーディング）配線後に埋まる。 */
   const [mapPickPoint, setMapPickPoint] = useState<GeoPoint | null>(null);
   const [mapPickLabel, setMapPickLabel] = useState<string | null>(null);
+  /** 検索バーと検索結果の状態（U05 接続までは骨格）。 */
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
   const runtime = useMemo(createRuntime, []);
   const { state, nav, actions } = useNavApp(runtime.deps);
   const selectedDestination = selectSelectedDestination(state);
@@ -116,15 +121,69 @@ export default function App(): ReactElement {
   let content: ReactElement;
   if (screen === 'destinations') {
     content = (
-      <DestinationListScreen
-        destinations={state.destinations}
-        selectedId={state.selectedDestinationId}
-        onSelect={(id) => {
+      <DestinationPickerScreen
+        searchQuery={searchQuery}
+        onChangeSearchQuery={setSearchQuery}
+        onSubmitSearch={() => {
+          if (searchQuery.trim().length === 0) {
+            return;
+          }
+          setSearchStatus('idle');
+          setScreen('search');
+        }}
+        currentLocationAvailable={
+          state.location !== null && nav.locationFreshness !== 'lost'
+        }
+        currentLocationLost={nav.locationFreshness === 'lost'}
+        onUseCurrentLocation={() => {
+          void (async () => {
+            const saved = await actions.useCurrentLocationAsDestination('');
+            if (saved) {
+              setScreen('main');
+            }
+          })();
+        }}
+        onOpenMapPick={() => {
+          setMapPickPoint(null);
+          setMapPickLabel(null);
+          setScreen('map');
+        }}
+        recent={recentDestinations(state.destinations).map((destination) => ({
+          id: destination.id,
+          name: destination.name,
+        }))}
+        favorites={filterFavorites(state.destinations).map((destination) => ({
+          id: destination.id,
+          name: destination.name,
+        }))}
+        onSelectRecent={(id) => {
           actions.selectDestination(id);
           setScreen('main');
         }}
-        onDelete={(id) => {
-          void actions.removeDestination(id);
+        onSelectFavorite={(id) => {
+          actions.selectDestination(id);
+          setScreen('main');
+        }}
+        shareLinkState="idle"
+        onImportShareLink={() => undefined}
+        shareLinkEnabled={false}
+        onBack={() => setScreen('main')}
+      />
+    );
+  } else if (screen === 'search') {
+    // U05（useDestinationPicker）接続までは骨格: 検索状態の表示と「地図から選ぶ」導線のみ。
+    content = (
+      <SearchResultsScreen
+        query={searchQuery}
+        status={searchStatus}
+        results={[]}
+        errorMessage={null}
+        onSelect={() => undefined}
+        onRetry={() => undefined}
+        onOpenMapPick={() => {
+          setMapPickPoint(null);
+          setMapPickLabel(null);
+          setScreen('map');
         }}
         onUseCurrentLocation={() => {
           void (async () => {
@@ -134,12 +193,7 @@ export default function App(): ReactElement {
             }
           })();
         }}
-        onOpenMap={() => {
-          setMapPickPoint(null);
-          setMapPickLabel(null);
-          setScreen('map');
-        }}
-        onBack={() => setScreen('main')}
+        onBack={() => setScreen('destinations')}
       />
     );
   } else if (screen === 'add') {

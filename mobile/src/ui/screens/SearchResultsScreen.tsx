@@ -55,8 +55,6 @@ export function SearchResultsScreen({
   onUseCurrentLocation,
   onBack,
 }: SearchResultsScreenProps): ReactElement {
-  const message = searchStatusMessageLabel(status);
-
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -140,8 +138,19 @@ export function SearchResultsScreen({
           </View>
         ) : null}
 
-        {message.length > 0 && status !== 'loading' && status !== 'empty' && status !== 'error' ? (
-          <Text style={styles.hint}>{message}</Text>
+        {status === 'idle' ? (
+          <View style={styles.section}>
+            <Text style={styles.hint}>{searchStatusMessageLabel('idle')}</Text>
+            <PrimaryButton
+              label={UI_TEXT.searchResults.openMap}
+              onPress={onOpenMapPick}
+            />
+            <PrimaryButton
+              label={UI_TEXT.searchResults.useCurrentLocation}
+              variant="secondary"
+              onPress={onUseCurrentLocation}
+            />
+          </View>
         ) : null}
       </ScrollView>
     </View>

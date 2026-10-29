@@ -34,6 +34,8 @@ export interface DestinationPickerScreenProps {
   /** 共有リンク取り込みの状態（タップ時のみクリップボードを読む）。 */
   readonly shareLinkState: ShareLinkState;
   readonly onImportShareLink: () => void;
+  /** 共有リンク導線を出すか（U03/U05 配線前は false にして未実装ボタンを見せない）。 */
+  readonly shareLinkEnabled?: boolean;
   readonly onBack: () => void;
 }
 
@@ -59,6 +61,7 @@ export function DestinationPickerScreen({
   onSelectFavorite,
   shareLinkState,
   onImportShareLink,
+  shareLinkEnabled = true,
   onBack,
 }: DestinationPickerScreenProps): ReactElement {
   const shareLinkMessage = shareLinkMessageLabel(shareLinkState);
@@ -152,21 +155,23 @@ export function DestinationPickerScreen({
           )}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            {UI_TEXT.destinationPicker.otherMethodsTitle}
-          </Text>
-          <PrimaryButton
-            label={UI_TEXT.destinationPicker.clipboardButton}
-            variant="secondary"
-            onPress={onImportShareLink}
-            disabled={shareLinkState === 'reading'}
-          />
-          <Text style={styles.hint}>{UI_TEXT.destinationPicker.clipboardHint}</Text>
-          {shareLinkMessage.length === 0 ? null : (
-            <Text style={styles.message}>{shareLinkMessage}</Text>
-          )}
-        </View>
+        {shareLinkEnabled ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {UI_TEXT.destinationPicker.otherMethodsTitle}
+            </Text>
+            <PrimaryButton
+              label={UI_TEXT.destinationPicker.clipboardButton}
+              variant="secondary"
+              onPress={onImportShareLink}
+              disabled={shareLinkState === 'reading'}
+            />
+            <Text style={styles.hint}>{UI_TEXT.destinationPicker.clipboardHint}</Text>
+            {shareLinkMessage.length === 0 ? null : (
+              <Text style={styles.message}>{shareLinkMessage}</Text>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );

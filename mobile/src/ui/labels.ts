@@ -11,7 +11,7 @@ import { normalizeSignedDegrees } from '../domain/normalize';
 import type { ValidationResult } from '../domain/validation';
 
 /** 画面 ID（UI 内の自前遷移。ADR-07）。 */
-export type ScreenId = 'main' | 'destinations' | 'add' | 'dev' | 'map';
+export type ScreenId = 'main' | 'destinations' | 'search' | 'add' | 'dev' | 'map';
 
 /** 目的地入力の検証エラーキー（domain の `ValidationResult.errorKey` を単一の源にする）。 */
 export type ValidationErrorKey = NonNullable<ValidationResult<unknown>['errorKey']>;
@@ -424,6 +424,8 @@ export function screenLabel(screen: ScreenId): string {
       return 'ナビ';
     case 'destinations':
       return '目的地';
+    case 'search':
+      return '検索結果';
     case 'add':
       return '目的地を追加';
     case 'dev':
