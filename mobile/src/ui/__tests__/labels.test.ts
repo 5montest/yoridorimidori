@@ -9,16 +9,25 @@ import type {
 import {
   UI_TEXT,
   birdAccessibilityLabel,
+  compassDetailLabel,
+  compassSummaryLabel,
+  directionWordLabel,
+  freshnessDetailLabel,
   freshnessLabel,
   freshnessWithAgeLabel,
   gpsAccuracyLabel,
   gpsAccuracyWithValueLabel,
+  gpsDetailLabel,
+  gpsSummaryLabel,
   headingAccuracyLabel,
   headingAccuracyWithValueLabel,
+  headingReferenceDetailLabel,
   headingReferenceLabel,
   navStatusLabel,
+  onboardingPageLabel,
   relativeDirectionLabel,
   screenLabel,
+  statusSummaryLine,
   validationErrorLabel,
   warningLabel,
   type ScreenId,
@@ -204,6 +213,60 @@ describe('screenLabel / UI_TEXT', () => {
     collectStrings(UI_TEXT, strings);
     expect(strings.length).toBeGreaterThan(0);
     strings.forEach(expectNonEmpty);
+  });
+});
+
+describe('一般ユーザー向けの言い換え（UX-4 / UX-8）', () => {
+  it('directionWordLabel: 8 方位の言葉を返す', () => {
+    expect(directionWordLabel(0)).toBe('真っすぐ前');
+    expect(directionWordLabel(45)).toBe('右ななめ前');
+    expect(directionWordLabel(90)).toBe('右');
+    expect(directionWordLabel(135)).toBe('右ななめ後ろ');
+    expect(directionWordLabel(180)).toBe('真後ろ');
+    expect(directionWordLabel(-45)).toBe('左ななめ前');
+    expect(directionWordLabel(-90)).toBe('左');
+    expect(directionWordLabel(-135)).toBe('左ななめ後ろ');
+    expect(directionWordLabel(null)).toBe('分かりません');
+    expect(directionWordLabel(Number.NaN)).toBe('分かりません');
+  });
+
+  it('gpsSummaryLabel / compassSummaryLabel: 全区分が非空', () => {
+    GPS_ACCURACY_CLASSES.forEach((value) => expectNonEmpty(gpsSummaryLabel(value)));
+    HEADING_ACCURACY_CLASSES.forEach((value) => expectNonEmpty(compassSummaryLabel(value)));
+    expect(compassSummaryLabel('uncalibrated')).not.toBe(compassSummaryLabel('unknown'));
+  });
+
+  it('statusSummaryLine: GPS とコンパスの 1 行サマリ', () => {
+    const line = statusSummaryLine('good', 'fair');
+    expect(line).toContain('GPS');
+    expect(line).toContain('コンパス');
+    expect(line).toContain('良好');
+    expect(line).toContain('普通');
+  });
+
+  it('gpsDetailLabel: 一般向けの説明と数値（詳細のみ）', () => {
+    expect(gpsDetailLabel('good', 8)).toContain('8 m');
+    expect(gpsDetailLabel('poor', 40)).toContain('屋外でお試しください');
+    expect(gpsDetailLabel('unknown', null)).toContain('取得しています');
+    expect(gpsDetailLabel('good', null)).toContain('取得しています');
+  });
+
+  it('freshnessDetailLabel: 経過と対処を返す', () => {
+    expect(freshnessDetailLabel('fresh', 1_000)).toBe('1 秒前に更新');
+    expect(freshnessDetailLabel('stale', 12_000)).toContain('屋外で再取得してください');
+    expect(freshnessDetailLabel('lost', 40_000)).toContain('30 秒以上');
+    expect(freshnessDetailLabel(null, null)).toContain('取得できていません');
+  });
+
+  it('compassDetailLabel / headingReferenceDetailLabel: 全区分が非空・磁北を含む', () => {
+    HEADING_ACCURACY_CLASSES.forEach((value) => expectNonEmpty(compassDetailLabel(value)));
+    expect(compassDetailLabel('uncalibrated')).toContain('8 の字');
+    HEADING_REFERENCES.forEach((value) => expectNonEmpty(headingReferenceDetailLabel(value)));
+    expect(headingReferenceDetailLabel('magnetic-north')).toContain('磁北');
+  });
+
+  it('onboardingPageLabel: ページ番号を返す', () => {
+    expect(onboardingPageLabel(1, 3)).toBe('1 / 3');
   });
 });
 

@@ -2,50 +2,64 @@ import type { ReactElement } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Destination } from '../../domain/types';
 import { UI_TEXT } from '../labels';
-import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../theme';
+import { COLORS, FONT_SIZE, RADIUS, SPACING, TAP_TARGET_MIN } from '../theme';
+import { PrimaryButton } from '../components/PrimaryButton';
 
 export interface DestinationListScreenProps {
   readonly destinations: readonly Destination[];
   readonly selectedId: string | null;
   readonly onSelect: (id: string) => void;
   readonly onDelete: (id: string) => void;
-  readonly onAddNew: () => void;
+  /** 現在地を目的地にする（現在地が使えないときは App 側が失敗を表示）。 */
+  readonly onUseCurrentLocation: () => void;
+  /** 地図で選ぶ画面（S4）へ。 */
+  readonly onOpenMap: () => void;
   readonly onBack: () => void;
 }
 
-/** 座標の表示整形（内部値は変更しない。5 桁小数で十分な精度）。 */
-function formatPoint(destination: Destination): string {
-  return `${destination.point.latitude.toFixed(5)}, ${destination.point.longitude.toFixed(5)}`;
-}
-
 /**
- * 目的地の一覧・選択・削除画面。§9.1 / FR-01。
+ * 目的地の選択画面（暫定 S3）。U06 完成までの橋渡し。
  *
- * - **表示専用**。一覧・選択 id・コールバックを props で受け取り、`hooks` / `adapters` を import しない。
- * - 選択中が削除されたときの選択解除はリデューサ（T19）と useNavApp（T20）が担う。
+ * - **座標は表示しない**（UX-1: 座標は内部表現）。名前と選択・削除のみ。
+ * - 一般ユーザーが使える入口として「現在地を目的地にする」「地図から選ぶ」を置く。
+ * - U06 で検索バー・最近・お気に入り・共有リンクを含む本実装に置き換える。
  */
 export function DestinationListScreen({
   destinations,
   selectedId,
   onSelect,
   onDelete,
-  onAddNew,
+  onUseCurrentLocation,
+  onOpenMap,
   onBack,
 }: DestinationListScreenProps): ReactElement {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>{UI_TEXT.destinationList.title}</Text>
         <Pressable
           accessibilityRole="button"
-          onPress={onAddNew}
-          style={({ pressed }) => [styles.primaryButton, pressed ? styles.pressed : null]}
+          onPress={onBack}
+          style={({ pressed }) => [styles.backIcon, pressed ? styles.pressed : null]}
         >
-          <Text style={styles.primaryButtonText}>{UI_TEXT.destinationList.add}</Text>
+          <Text style={styles.backIconText}>←</Text>
         </Pressable>
+        <Text style={styles.title}>{UI_TEXT.destinationList.title}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listContent}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.quickActions}>
+          <PrimaryButton
+            label={UI_TEXT.destinationList.useCurrentLocation}
+            onPress={onUseCurrentLocation}
+          />
+          <PrimaryButton
+            label={UI_TEXT.destinationList.openMap}
+            variant="secondary"
+            onPress={onOpenMap}
+          />
+        </View>
+
+        <Text style={styles.sectionTitle}>{UI_TEXT.destinationList.title}</Text>
         {destinations.length === 0 ? (
           <Text style={styles.empty}>{UI_TEXT.destinationList.empty}</Text>
         ) : (
@@ -62,13 +76,14 @@ export function DestinationListScreen({
                   onPress={() => onSelect(destination.id)}
                   style={styles.rowMain}
                 >
-                  <View style={styles.rowText}>
-                    <Text style={styles.name}>
-                      {destination.name}
-                      {selected ? `（${UI_TEXT.destinationList.selected}）` : ''}
+                  <Text style={styles.name} numberOfLines={2}>
+                    {destination.name}
+                  </Text>
+                  {selected ? (
+                    <Text style={styles.selectedLabel}>
+                      {UI_TEXT.destinationList.selected}
                     </Text>
-                    <Text style={styles.point}>{formatPoint(destination)}</Text>
-                  </View>
+                  ) : null}
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -82,15 +97,8 @@ export function DestinationListScreen({
             );
           })
         )}
+        <Text style={styles.hint}>{UI_TEXT.destinationList.hint}</Text>
       </ScrollView>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={onBack}
-        style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
-      >
-        <Text style={styles.backButtonText}>{UI_TEXT.destinationList.back}</Text>
-      </Pressable>
     </View>
   );
 }
@@ -100,27 +108,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
     padding: SPACING.md,
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  backIcon: {
+    minWidth: TAP_TARGET_MIN,
+    minHeight: TAP_TARGET_MIN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIconText: {
+    fontSize: FONT_SIZE.heading,
+    color: COLORS.primary,
   },
   title: {
     fontSize: FONT_SIZE.title,
     fontWeight: '700',
     color: COLORS.text,
   },
-  listContent: {
+  content: {
     gap: SPACING.sm,
-    paddingBottom: SPACING.md,
+    paddingBottom: SPACING.xl,
+  },
+  quickActions: {
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZE.body,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    marginTop: SPACING.sm,
   },
   empty: {
     fontSize: FONT_SIZE.bodyLarge,
     color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: SPACING.xl,
+    marginTop: SPACING.md,
   },
   row: {
     flexDirection: 'row',
@@ -132,6 +159,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     gap: SPACING.sm,
+    minHeight: TAP_TARGET_MIN + 16,
   },
   rowSelected: {
     borderColor: COLORS.primary,
@@ -139,20 +167,22 @@ const styles = StyleSheet.create({
   },
   rowMain: {
     flex: 1,
-  },
-  rowText: {
     gap: 2,
+    justifyContent: 'center',
   },
   name: {
     fontSize: FONT_SIZE.bodyLarge,
     fontWeight: '600',
     color: COLORS.text,
   },
-  point: {
+  selectedLabel: {
     fontSize: FONT_SIZE.caption,
-    color: COLORS.textMuted,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   deleteButton: {
+    minHeight: TAP_TARGET_MIN,
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.warning,
     borderRadius: RADIUS.pill,
@@ -164,29 +194,10 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.body,
     fontWeight: '600',
   },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.pill,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-  },
-  primaryButtonText: {
-    color: COLORS.onPrimary,
-    fontSize: FONT_SIZE.bodyLarge,
-    fontWeight: '600',
-  },
-  backButton: {
-    alignSelf: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.primary,
-    borderRadius: RADIUS.pill,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-  },
-  backButtonText: {
-    color: COLORS.primary,
-    fontSize: FONT_SIZE.bodyLarge,
-    fontWeight: '600',
+  hint: {
+    fontSize: FONT_SIZE.caption,
+    color: COLORS.textMuted,
+    marginTop: SPACING.sm,
   },
   pressed: {
     opacity: 0.8,

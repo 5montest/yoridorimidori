@@ -1,62 +1,106 @@
-import type { ReactElement, ReactNode } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { formatBearingDeg, formatDistanceM } from '../../domain/format';
-import type { HeadingAccuracyLevel, NavState } from '../../domain/types';
+import { formatDistanceM } from '../../domain/format';
+import type { NavState } from '../../domain/types';
+import type { PermissionOutcome } from '../../ports/common';
 import {
   UI_TEXT,
-  relativeDirectionCaption,
+  directionWordLabel,
 } from '../labels';
-import { COLORS, FONT_SIZE, RADIUS, SCREEN_BOTTOM_PADDING, SPACING, TONE_COLORS } from '../theme';
+import {
+  COLORS,
+  FONT_SIZE,
+  RADIUS,
+  SCREEN_BOTTOM_PADDING,
+  SPACING,
+  TAP_TARGET_MIN,
+} from '../theme';
 import { Bird } from '../components/Bird';
-import { NavStatusPanel } from '../components/NavStatusPanel';
+import { DestinationChip } from '../components/DestinationChip';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { StatusDetailSheet } from '../components/StatusDetailSheet';
+import { StatusSummaryBar } from '../components/StatusSummaryBar';
 
 export interface MainScreenProps {
   /** 表示用の派生値（domain の計算結果。UI では再計算しない）。 */
   readonly nav: NavState;
   /** 選択中の目的地名。未選択なら `null`。 */
   readonly destinationName: string | null;
-  /** GPS 精度の生値（m）。ステータスパネルの数値表示用。 */
+  /** お気に入り状態。`null` は未対応（☆ を出さない）。 */
+  readonly destinationFavorite: boolean | null;
+  /** GPS 精度の生値（m）。ステータス詳細シートのみで数値として使う。 */
   readonly gpsAccuracyM: number | null;
-  /** 方位精度の生値（0〜3）。ステータスパネルの数値表示用。 */
-  readonly headingAccuracyLevel: HeadingAccuracyLevel | null;
-  /** Mock モード ON/OFF（開発ビルドのみ切替可）。 */
-  readonly mockMode: boolean;
-  /** 開発ビルドか（`__DEV__` 由来。App が決める）。 */
-  readonly devToolsVisible: boolean;
-  /** 権限拒否などの案内（App が組み立てた表示専用ノード）。 */
-  readonly permissionNotice?: ReactNode;
-  readonly onChangeDestination: () => void;
-  readonly onOpenDestinations: () => void;
-  readonly onOpenMap: () => void;
-  readonly onOpenDevLog: () => void;
-  readonly onToggleMock: () => void;
+  /** 位置情報の権限状態（拒否時の案内に使う）。 */
+  readonly permission: PermissionOutcome | null;
+  /** 目的地チップ・主要ボタンから S3（目的地を選ぶ）へ。 */
+  readonly onOpenDestinationPicker: () => void;
+  readonly onToggleFavorite: () => void;
+  readonly onRequestPermission: () => void;
+  readonly onRetryLocation: () => void;
+  /** タイトル長押し（3 秒）で S7 開発メニューへ。 */
+  readonly onOpenDevMenu: () => void;
 }
 
 /**
- * メイン（ナビ）画面。§9.2。
+ * メイン（ナビ）画面 S2。UX-1〜UX-8 / docs/ux-design.md §4。
  *
- * - **表示専用**。`NavState` と目的地名・生値・コールバックを props で受け取り、
- *   `hooks` / `adapters` を import しない（§2.2）。
- * - 方位・距離・鮮度を再計算しない（domain の結果を整形して表示するだけ）。
- * - 到着時は距離実値・鳥上向き・「到着」を大きく・相対方位は `—`（§9.5）。
+ * - **表示専用**。`NavState` と目的地名・コールバックを props で受け取り、
+ *   `hooks` / `adapters` を import しない。
+ * - 目的地チップ（名前 + ▾ + ☆）/ 大きなオオハシ / 大きな距離 / 8 方位の言葉 /
+ *   1 行サマリ（タップで S6）/ 主要ボタン「目的地を選ぶ」。
+ * - **Mock・記録・生の精度数値は常時表示しない**（開発メニュー S7 へ隔離）。
+ * - 権限拒否・位置不明・測位中は「次に何をすればよいか」を 1 文で示す（UX-5）。
  */
 export function MainScreen({
   nav,
   destinationName,
+  destinationFavorite,
   gpsAccuracyM,
-  headingAccuracyLevel,
-  mockMode,
-  devToolsVisible,
-  permissionNotice,
-  onChangeDestination,
-  onOpenDestinations,
-  onOpenMap,
-  onOpenDevLog,
-  onToggleMock,
+  permission,
+  onOpenDestinationPicker,
+  onToggleFavorite,
+  onRequestPermission,
+  onRetryLocation,
+  onOpenDevMenu,
 }: MainScreenProps): ReactElement {
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [permissionDismissed, setPermissionDismissed] = useState(false);
+
   const arrived = nav.status === 'arrived';
-  const distanceText = formatDistanceM(nav.distanceM);
-  const relativeBearingText = arrived ? UI_TEXT.noValue : formatBearingDeg(nav.relativeBearingDeg);
+  const hasDestination = destinationName !== null;
+  const hasLocation = nav.locationAgeMs !== null;
+  const locating = nav.status === 'locating' || (hasDestination && !hasLocation);
+  const positionLost = nav.status === 'position-lost';
+  const headingUnknown = nav.status === 'heading-unknown';
+  const permissionBlocked =
+    permission !== null &&
+    (permission.status === 'denied' || permission.status === 'undetermined');
+  const showPermissionCard = permissionBlocked && !permissionDismissed;
+  const showLocationState = hasDestination && (locating || positionLost);
+  const showDistance = hasDestination && hasLocation && !arrived && !positionLost;
+
+  const directionCaption = (): string => {
+    if (!hasDestination) {
+      return UI_TEXT.main.noDestinationBody;
+    }
+    if (positionLost) {
+      return UI_TEXT.main.positionLostBody;
+    }
+    if (locating) {
+      return UI_TEXT.main.locatingBody;
+    }
+    if (arrived) {
+      return UI_TEXT.main.arrivedBody;
+    }
+    if (headingUnknown) {
+      return UI_TEXT.main.headingUnknownBody;
+    }
+    return `${UI_TEXT.main.directionPrefix} ${directionWordLabel(nav.relativeBearingDeg)}`;
+  };
+
+  const primaryLabel = arrived
+    ? UI_TEXT.main.changeDestinationShort
+    : UI_TEXT.main.selectDestination;
 
   return (
     <View style={styles.screen}>
@@ -64,83 +108,129 @@ export function MainScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.headerLabel}>{`${UI_TEXT.main.destinationLabel}:`}</Text>
-          <Text style={styles.headerName} numberOfLines={2}>
-            {destinationName ?? UI_TEXT.main.destinationEmpty}
-          </Text>
+        <View style={styles.topRow}>
           <Pressable
-            accessibilityRole="button"
-            onPress={onChangeDestination}
-            style={({ pressed }) => [styles.smallButton, pressed ? styles.pressed : null]}
+            accessibilityRole="header"
+            accessibilityLabel={UI_TEXT.appTitle}
+            accessibilityHint={UI_TEXT.main.devMenuHint}
+            delayLongPress={3000}
+            onLongPress={onOpenDevMenu}
+            style={styles.titleButton}
           >
-            <Text style={styles.smallButtonText}>{UI_TEXT.main.changeDestination}</Text>
+            <Text style={styles.appTitle}>{UI_TEXT.appTitle}</Text>
           </Pressable>
+          <DestinationChip
+            name={destinationName}
+            favorite={destinationFavorite}
+            onPress={onOpenDestinationPicker}
+            onToggleFavorite={onToggleFavorite}
+          />
         </View>
 
-        {permissionNotice}
+        {showPermissionCard ? (
+          <StateCard
+            title={UI_TEXT.main.permissionTitle}
+            body={UI_TEXT.main.permissionBody}
+            primaryLabel={UI_TEXT.main.permissionAllow}
+            onPrimary={onRequestPermission}
+            secondaryLabel={UI_TEXT.main.permissionLater}
+            onSecondary={() => setPermissionDismissed(true)}
+          />
+        ) : null}
+
+        {showLocationState ? (
+          <StateCard
+            title={
+              positionLost ? UI_TEXT.main.positionLostTitle : UI_TEXT.main.locatingTitle
+            }
+            body={
+              positionLost ? UI_TEXT.main.positionLostBody : UI_TEXT.main.locatingBody
+            }
+            primaryLabel={UI_TEXT.main.retry}
+            onPrimary={onRetryLocation}
+          />
+        ) : null}
 
         <View style={styles.birdArea}>
-          <Bird relativeBearingDeg={nav.relativeBearingDeg} arrived={arrived} />
+          <Bird
+            relativeBearingDeg={nav.relativeBearingDeg}
+            arrived={arrived}
+            size={230}
+          />
         </View>
 
         <View style={styles.readout}>
-          <Text style={styles.distance}>{distanceText}</Text>
-          <Text style={styles.relativeBearing}>{relativeBearingText}</Text>
-          <Text style={styles.caption}>
-            {relativeDirectionCaption(nav.relativeBearingDeg, arrived)}
-          </Text>
-          {arrived ? <Text style={styles.arrived}>{UI_TEXT.main.arrived}</Text> : null}
+          {arrived ? (
+            <>
+              <Text style={styles.arrivedTitle}>{UI_TEXT.main.arrivedTitle}</Text>
+              <Text style={styles.arrivedDistance}>{formatDistanceM(nav.distanceM)}</Text>
+            </>
+          ) : showDistance ? (
+            <Text style={styles.distance}>{formatDistanceM(nav.distanceM)}</Text>
+          ) : null}
+          <Text style={styles.caption}>{directionCaption()}</Text>
         </View>
 
-        <NavStatusPanel
-          nav={nav}
-          gpsAccuracyM={gpsAccuracyM}
-          headingAccuracyLevel={headingAccuracyLevel}
-        />
-
-        <View style={styles.footer}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenDestinations}
-            style={({ pressed }) => [styles.button, pressed ? styles.pressed : null]}
-          >
-            <Text style={styles.buttonText}>{UI_TEXT.main.openDestinations}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenMap}
-            style={({ pressed }) => [styles.button, pressed ? styles.pressed : null]}
-          >
-            <Text style={styles.buttonText}>{UI_TEXT.main.openMap}</Text>
-          </Pressable>
-          {devToolsVisible ? (
-            <>
-              <Pressable
-                accessibilityRole="button"
-                onPress={onOpenDevLog}
-                style={({ pressed }) => [styles.button, pressed ? styles.pressed : null]}
-              >
-                <Text style={styles.buttonText}>{UI_TEXT.main.openDevLog}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={onToggleMock}
-                style={({ pressed }) => [
-                  styles.button,
-                  styles.mockButton,
-                  mockMode ? styles.mockButtonOn : null,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text style={styles.buttonText}>
-                  {mockMode ? UI_TEXT.main.mockOn : UI_TEXT.main.mockOff}
-                </Text>
-              </Pressable>
-            </>
-          ) : null}
+        <View style={styles.bottomArea}>
+          <StatusSummaryBar
+            gpsAccuracyClass={nav.gpsAccuracyClass}
+            headingAccuracyClass={nav.headingAccuracyClass}
+            onPress={() => setDetailVisible(true)}
+          />
+          <PrimaryButton label={primaryLabel} onPress={onOpenDestinationPicker} />
         </View>
       </ScrollView>
+
+      <StatusDetailSheet
+        visible={detailVisible}
+        nav={nav}
+        gpsAccuracyM={gpsAccuracyM}
+        onClose={() => setDetailVisible(false)}
+      />
+    </View>
+  );
+}
+
+interface StateCardProps {
+  readonly title: string;
+  readonly body: string;
+  readonly primaryLabel: string;
+  readonly onPrimary: () => void;
+  readonly secondaryLabel?: string;
+  readonly onSecondary?: () => void;
+}
+
+/** 状態の案内カード（権限拒否・位置不明など）。「次に何をすればよいか」を 1 文で示す。 */
+function StateCard({
+  title,
+  body,
+  primaryLabel,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+}: StateCardProps): ReactElement {
+  return (
+    <View style={styles.stateCard}>
+      <Text style={styles.stateTitle}>{title}</Text>
+      <Text style={styles.stateBody}>{body}</Text>
+      <View style={styles.stateActions}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPrimary}
+          style={({ pressed }) => [styles.statePrimary, pressed ? styles.pressed : null]}
+        >
+          <Text style={styles.statePrimaryText}>{primaryLabel}</Text>
+        </Pressable>
+        {secondaryLabel !== undefined && onSecondary !== undefined ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onSecondary}
+            style={({ pressed }) => [styles.stateSecondary, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.stateSecondaryText}>{secondaryLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -156,32 +246,20 @@ const styles = StyleSheet.create({
     paddingBottom: SCREEN_BOTTOM_PADDING,
     gap: SPACING.md,
   },
-  header: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: SPACING.sm,
   },
-  headerLabel: {
-    fontSize: FONT_SIZE.body,
+  titleButton: {
+    minHeight: TAP_TARGET_MIN,
+    justifyContent: 'center',
+  },
+  appTitle: {
+    fontSize: FONT_SIZE.bodyLarge,
+    fontWeight: '800',
     color: COLORS.textMuted,
-  },
-  headerName: {
-    flex: 1,
-    fontSize: FONT_SIZE.title,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  smallButton: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.primary,
-    borderRadius: RADIUS.pill,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-  },
-  smallButtonText: {
-    color: COLORS.primary,
-    fontSize: FONT_SIZE.body,
-    fontWeight: '600',
   },
   birdArea: {
     alignItems: 'center',
@@ -193,48 +271,82 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   distance: {
-    fontSize: FONT_SIZE.display,
-    fontWeight: '700',
+    fontSize: FONT_SIZE.hero,
+    fontWeight: '800',
     color: COLORS.text,
   },
-  relativeBearing: {
-    fontSize: FONT_SIZE.heading,
-    color: COLORS.text,
-  },
-  caption: {
-    fontSize: FONT_SIZE.body,
-    color: COLORS.textMuted,
-  },
-  arrived: {
+  arrivedTitle: {
     fontSize: FONT_SIZE.huge,
     fontWeight: '800',
     color: COLORS.primary,
+    textAlign: 'center',
   },
-  footer: {
+  arrivedDistance: {
+    fontSize: FONT_SIZE.title,
+    color: COLORS.textMuted,
+  },
+  caption: {
+    fontSize: FONT_SIZE.bodyLarge,
+    color: COLORS.text,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  bottomArea: {
     marginTop: 'auto',
+    gap: SPACING.md,
+  },
+  stateCard: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    gap: SPACING.xs,
+  },
+  stateTitle: {
+    fontSize: FONT_SIZE.bodyLarge,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  stateBody: {
+    fontSize: FONT_SIZE.body,
+    lineHeight: 22,
+    color: COLORS.text,
+  },
+  stateActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: SPACING.sm,
-    justifyContent: 'center',
+    marginTop: SPACING.xs,
   },
-  button: {
+  statePrimary: {
+    minHeight: TAP_TARGET_MIN,
+    justifyContent: 'center',
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.pill,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
   },
-  mockButton: {
-    backgroundColor: COLORS.textMuted,
+  statePrimaryText: {
+    color: COLORS.onPrimary,
+    fontSize: FONT_SIZE.bodyLarge,
+    fontWeight: '700',
   },
-  mockButtonOn: {
-    backgroundColor: TONE_COLORS.fair,
+  stateSecondary: {
+    minHeight: TAP_TARGET_MIN,
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.pill,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+  },
+  stateSecondaryText: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.bodyLarge,
+    fontWeight: '600',
   },
   pressed: {
     opacity: 0.8,
-  },
-  buttonText: {
-    color: COLORS.onPrimary,
-    fontSize: FONT_SIZE.bodyLarge,
-    fontWeight: '600',
   },
 });

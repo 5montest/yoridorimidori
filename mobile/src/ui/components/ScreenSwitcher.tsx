@@ -3,15 +3,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { screenLabel, type ScreenId } from '../labels';
 import { COLORS, FONT_SIZE, SPACING } from '../theme';
 
-/** 常時表示するタブ（メイン・目的地）。開発用タブは `devToolsVisible` のときだけ出す。 */
-const BASE_TABS: readonly ScreenId[] = ['main', 'destinations', 'dev'];
+/** 常時表示するタブ（メイン・目的地のみ）。開発メニューはタイトル長押しの隠し導線（UX-6）。 */
+const BASE_TABS: readonly ScreenId[] = ['main', 'destinations'];
 
 export interface ScreenSwitcherProps {
   /** 現在の画面（App が保持する自前の遷移状態。ADR-07）。 */
   readonly screen: ScreenId;
   readonly onChange: (screen: ScreenId) => void;
-  /** 開発ビルドか（`__DEV__` 由来。開発用タブの表示制御のみに使う）。 */
-  readonly devToolsVisible: boolean;
   /** 表示中の画面要素。 */
   readonly children: ReactNode;
 }
@@ -36,17 +34,13 @@ function isActiveTab(screen: ScreenId, tab: ScreenId): boolean {
 export function ScreenSwitcher({
   screen,
   onChange,
-  devToolsVisible,
   children,
 }: ScreenSwitcherProps): ReactElement {
-  const tabs = devToolsVisible
-    ? BASE_TABS
-    : BASE_TABS.filter((tab) => tab !== 'dev');
   return (
     <View style={styles.root}>
       <View style={styles.content}>{children}</View>
       <View style={styles.tabBar}>
-        {tabs.map((tab) => {
+        {BASE_TABS.map((tab) => {
           const active = isActiveTab(screen, tab);
           return (
             <Pressable

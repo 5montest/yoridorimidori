@@ -35,6 +35,8 @@ export interface DevLogScreenProps {
   readonly devToolsVisible: boolean;
   readonly onToggleMock: () => void;
   readonly onSelectScenario: (id: ScenarioId | null) => void;
+  /** 座標で設定（開発用・S7）へ。一般画面には置かない（UX-1 / UX-6）。 */
+  readonly onOpenCoordinateSetting: () => void;
   readonly onBack: () => void;
 }
 
@@ -57,6 +59,7 @@ export function DevLogScreen({
   devToolsVisible,
   onToggleMock,
   onSelectScenario,
+  onOpenCoordinateSetting,
   onBack,
 }: DevLogScreenProps): ReactElement {
   const summary = useMemo(
@@ -71,7 +74,7 @@ export function DevLogScreen({
   if (!devToolsVisible) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.title}>{UI_TEXT.devLog.title}</Text>
+        <Text style={styles.title}>{UI_TEXT.devMenu.title}</Text>
         <Text style={styles.note}>{UI_TEXT.mockControl.devOnlyNote}</Text>
         <Pressable
           accessibilityRole="button"
@@ -86,9 +89,22 @@ export function DevLogScreen({
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.title}>{UI_TEXT.devLog.title}</Text>
+      <Text style={styles.title}>{UI_TEXT.devMenu.title}</Text>
+      <Text style={styles.note}>{UI_TEXT.devMenu.subtitle}</Text>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{UI_TEXT.devMenu.coordinateSetting}</Text>
+          <Text style={styles.note}>{UI_TEXT.devMenu.coordinateSettingNote}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenCoordinateSetting}
+            style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.backButtonText}>{UI_TEXT.devMenu.coordinateSetting}</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{UI_TEXT.devLog.summaryTitle}</Text>
           <SummaryRow

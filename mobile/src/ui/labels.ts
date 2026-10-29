@@ -194,6 +194,145 @@ export function relativeDirectionLabel(relativeBearingDeg: number | null): strin
   return '真後ろ';
 }
 
+// ── 一般ユーザー向けの言い換え（UX-4 / UX-8: 専門用語・英語 enum 名を出さない）────
+
+/** 8 方位の言葉（UX 文言表: 真っすぐ前 / 右ななめ前 / 右 / 右ななめ後ろ / 真後ろ / ...）。 */
+export function directionWordLabel(relativeBearingDeg: number | null): string {
+  if (relativeBearingDeg === null || !Number.isFinite(relativeBearingDeg)) {
+    return '分かりません';
+  }
+  const normalized = normalizeSignedDegrees(relativeBearingDeg);
+  const magnitude = Math.abs(normalized);
+  if (magnitude <= 22.5) {
+    return '真っすぐ前';
+  }
+  if (magnitude <= 67.5) {
+    return normalized > 0 ? '右ななめ前' : '左ななめ前';
+  }
+  if (magnitude <= 112.5) {
+    return normalized > 0 ? '右' : '左';
+  }
+  if (magnitude <= 157.5) {
+    return normalized > 0 ? '右ななめ後ろ' : '左ななめ後ろ';
+  }
+  return '真後ろ';
+}
+
+/** GPS の要約（一般向け・1 行サマリ用）。 */
+export function gpsSummaryLabel(accuracyClass: GpsAccuracyClass): string {
+  switch (accuracyClass) {
+    case 'good':
+      return '良好';
+    case 'fair':
+      return '普通';
+    case 'poor':
+      return '不良';
+    case 'unknown':
+      return '計測中';
+  }
+}
+
+/** コンパスの要約（一般向け・1 行サマリ用）。`poor` は柔らかく「やや不安定」と言う。 */
+export function compassSummaryLabel(accuracyClass: HeadingAccuracyClass): string {
+  switch (accuracyClass) {
+    case 'good':
+      return '良好';
+    case 'fair':
+      return '普通';
+    case 'poor':
+      return 'やや不安定';
+    case 'uncalibrated':
+      return '要調整';
+    case 'unknown':
+      return '計測中';
+  }
+}
+
+/** 1 行の状態サマリ（例: `GPS：良好　コンパス：普通`）。S2 / S6。 */
+export function statusSummaryLine(
+  gpsAccuracyClass: GpsAccuracyClass,
+  headingAccuracyClass: HeadingAccuracyClass,
+): string {
+  return `${UI_TEXT.main.gpsPrefix}：${gpsSummaryLabel(gpsAccuracyClass)}　${
+    UI_TEXT.main.compassPrefix
+  }：${compassSummaryLabel(headingAccuracyClass)}`;
+}
+
+/** GPS の詳細（数値は詳細シートのみ。UX 文言表の詳細列）。 */
+export function gpsDetailLabel(
+  accuracyClass: GpsAccuracyClass,
+  accuracyM: number | null,
+): string {
+  if (
+    accuracyClass === 'unknown' ||
+    accuracyM === null ||
+    !Number.isFinite(accuracyM) ||
+    accuracyM < 0
+  ) {
+    return '位置情報を取得しています…';
+  }
+  const meters = `約 ${Math.round(accuracyM)} m`;
+  switch (accuracyClass) {
+    case 'good':
+    case 'fair':
+      return `誤差 ${meters}`;
+    case 'poor':
+      return `誤差 ${meters}。屋外でお試しください`;
+  }
+}
+
+/** 更新からの経過時間の詳細（一般向け）。 */
+export function freshnessDetailLabel(
+  freshness: Freshness | null,
+  ageMs: number | null,
+): string {
+  if (freshness === null || ageMs === null || !Number.isFinite(ageMs) || ageMs < 0) {
+    return 'まだ取得できていません';
+  }
+  switch (freshness) {
+    case 'fresh':
+    case 'aging':
+      return `${formatAgeMs(ageMs)}前に更新`;
+    case 'stale':
+      return `${formatAgeMs(ageMs)}前に更新。屋外で再取得してください`;
+    case 'lost':
+      return '30 秒以上更新されていません';
+  }
+}
+
+/** コンパスの詳細（一般向け）。 */
+export function compassDetailLabel(accuracyClass: HeadingAccuracyClass): string {
+  switch (accuracyClass) {
+    case 'good':
+      return 'コンパスの精度: 高';
+    case 'fair':
+      return 'コンパスの精度: 中';
+    case 'poor':
+      return 'コンパスの精度: 低。周囲の金属や磁気の影響を受けている可能性があります';
+    case 'uncalibrated':
+      return '端末を 8 の字に振ってください';
+    case 'unknown':
+      return 'コンパスの準備中です';
+  }
+}
+
+/** 方位基準の詳細（一般向け）。 */
+export function headingReferenceDetailLabel(reference: HeadingReference): string {
+  switch (reference) {
+    case 'true-north':
+      return '真北基準で表示しています';
+    case 'magnetic-north':
+      return '磁北基準で表示しています';
+    case 'unknown':
+      return '方位の基準を判定できていません';
+  }
+}
+
+/** オンボーディングのページ番号（例: `1 / 3`）。 */
+export function onboardingPageLabel(current: number, total: number): string {
+  return `${current} / ${total}`;
+}
+
 /** 相対方位の説明文（数値表示の補助。§9.2 の「目的地は右後ろ」）。 */
 export function relativeDirectionCaption(
   relativeBearingDeg: number | null,
@@ -219,7 +358,7 @@ export function birdAccessibilityLabel(
   if (relativeBearingDeg === null || !Number.isFinite(relativeBearingDeg)) {
     return '目的地の方向が分かりません';
   }
-  return `目的地は${relativeDirectionLabel(relativeBearingDeg)}の方向です`;
+  return `目的地は${directionWordLabel(relativeBearingDeg)}の方向です`;
 }
 
 /** 画面 ID の文言（画面切替・見出し）。 */
@@ -295,7 +434,7 @@ function pad2(value: number): string {
 export const UI_TEXT = {
   appTitle: '寄鳥美鳥地',
   noValue: NO_VALUE,
-  /** メイン画面 */
+  /** メイン画面（S2）*/
   main: {
     destinationLabel: '目的地',
     destinationEmpty: '目的地を選んでください',
@@ -312,8 +451,44 @@ export const UI_TEXT = {
     openMap: '地図',
     mockOn: 'Mock: ON',
     mockOff: 'Mock: OFF',
+    // ── 一般ユーザー向け（UX 刷新）──
+    gpsPrefix: 'GPS',
+    compassPrefix: 'コンパス',
+    destinationChipEmpty: '目的地を選ぶ',
+    destinationChipPrefix: '目的地',
+    favoriteAdd: 'お気に入りに追加',
+    favoriteRemove: 'お気に入りから外す',
+    directionPrefix: '目的地は',
+    selectDestination: '目的地を選ぶ',
+    changeDestinationShort: '目的地を変える',
+    arrivedTitle: '到着しました',
+    arrivedBody: '目的地に着きました。おつかれさまでした。',
+    locatingTitle: '現在地を探しています…',
+    locatingBody: '電波の良い場所で、少しお待ちください。',
+    retry: 'もう一度探す',
+    permissionTitle: '位置情報を使えません',
+    permissionBody:
+      'このアプリは現在地から目的地の方向を示します。位置情報の利用を許可してください。',
+    permissionAllow: '許可する',
+    permissionLater: 'あとで',
+    positionLostTitle: '現在地が分からなくなりました',
+    positionLostBody: '屋外に出るか、端末の位置情報がオンになっているか確認してください。',
+    noDestinationBody: '目的地を選ぶと、オオハシが方向を教えます。',
+    headingUnknownBody: 'コンパスを準備しています。端末を軽く動かしてみてください。',
+    statusSummaryHint: 'タップして詳しく見る',
+    devMenuHint: 'タイトルを長押し',
   },
-  /** 目的地一覧 */
+  /** 状態の詳細（S6）*/
+  statusDetail: {
+    title: '状態の詳細',
+    close: '閉じる',
+    gpsTitle: 'GPS（位置情報）',
+    compassTitle: 'コンパス（方位）',
+    warningsTitle: '気になる点',
+    noWarnings: '特にありません。このまま使えます。',
+    freshTitle: '更新状況',
+  },
+  /** 目的地一覧（暫定 S3。U06 で検索・地図・最近・お気に入りに置換）*/
   destinationList: {
     title: '目的地',
     empty: '目的地が登録されていません',
@@ -323,6 +498,9 @@ export const UI_TEXT = {
     back: 'ナビに戻る',
     latitudeShort: '緯度',
     longitudeShort: '経度',
+    useCurrentLocation: '現在地を目的地にする',
+    openMap: '地図から選ぶ',
+    hint: '目的地をタップするとナビに戻ります。',
   },
   /** 目的地追加 */
   destinationAdd: {
@@ -429,5 +607,38 @@ export const UI_TEXT = {
     relativeBearingLabel: '相対方位',
     locationLabel: '現在地',
     coordinatesLabel: '座標',
+  },
+  /** オンボーディング（S1・初回のみ 3 枚）*/
+  onboarding: {
+    skip: 'スキップ',
+    next: '次へ',
+    start: 'はじめる',
+    page1Title: '寄り道も、迷わない。',
+    page1Body:
+      '寄鳥美鳥地は、オオハシが目的地の方向を教えてくれるナビです。歩きながら、ふと顔を上げてみてください。',
+    page2Title: '位置情報について',
+    page2Body:
+      '現在地から目的地の方向を計算するために位置情報を使います。データは端末の中だけで扱い、外部に送信しません。',
+    page3Title: '目的地はかんたんに',
+    page3Body:
+      '地図をタップする・場所を検索する・現在地や最近使った場所から選ぶ、のどれでも目的地を設定できます。',
+    reopen: 'オンボーディングを再表示',
+    pageTitles: ['寄り道も、迷わない。', '位置情報について', '目的地はかんたんに'] as const,
+    pageBodies: [
+      '寄鳥美鳥地は、オオハシが目的地の方向を教えてくれるナビです。歩きながら、ふと顔を上げてみてください。',
+      '現在地から目的地の方向を計算するために位置情報を使います。データは端末の中だけで扱い、外部に送信しません。',
+      '地図をタップする・場所を検索する・現在地や最近使った場所から選ぶ、のどれでも目的地を設定できます。',
+    ] as const,
+  },
+  /** 開発メニュー（S7・隠し導線）*/
+  devMenu: {
+    title: '開発メニュー',
+    back: 'ナビに戻る',
+    subtitle: '一般の操作では表示されません',
+    coordinateSetting: '座標で設定（開発用）',
+    coordinateSettingNote:
+      '通常の目的地設定は「目的地を選ぶ」から地図・検索で行います。座標入力は開発用です。',
+    logSection: '記録・Mock',
+    onboardingReset: 'オンボーディングを再表示',
   },
 } as const;

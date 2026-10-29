@@ -15,7 +15,6 @@ import { selectSelectedDestination } from './src/hooks/selectors';
 import { useNavApp, type NavAppDeps } from './src/hooks/useNavApp';
 import type { MockSensorController } from './src/ports/mockSensor';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
-import { PermissionNotice } from './src/ui/components/PermissionNotice';
 import { ScreenSwitcher } from './src/ui/components/ScreenSwitcher';
 import { type ScreenId } from './src/ui/labels';
 import { DestinationAddScreen } from './src/ui/screens/DestinationAddScreen';
@@ -110,18 +109,6 @@ export default function App(): ReactElement {
     return startMockTicker(runtime.controller, MOCK_TICKER_INTERVAL_MS);
   }, [state.mockMode, runtime.controller]);
 
-  const permissionNotice = (
-    <PermissionNotice
-      permission={state.permission}
-      mockMode={state.mockMode}
-      canStartMock={devToolsVisible}
-      onRetry={() => {
-        void actions.retryPermission();
-      }}
-      onStartMock={() => actions.toggleMockMode()}
-    />
-  );
-
   let content: ReactElement;
   if (screen === 'destinations') {
     content = (
@@ -135,11 +122,20 @@ export default function App(): ReactElement {
         onDelete={(id) => {
           void actions.removeDestination(id);
         }}
-        onAddNew={() => setScreen('add')}
+        onUseCurrentLocation={() => {
+          void (async () => {
+            const saved = await actions.useCurrentLocationAsDestination('');
+            if (saved) {
+              setScreen('main');
+            }
+          })();
+        }}
+        onOpenMap={() => setScreen('map')}
         onBack={() => setScreen('main')}
       />
     );
   } else if (screen === 'add') {
+    // 座標入力は開発メニュー（S7）からのみ到達する（UX-1 / UX-6）。
     content = (
       <DestinationAddScreen
         currentPoint={state.location?.point ?? null}
@@ -151,21 +147,21 @@ export default function App(): ReactElement {
             origin: 'manual',
           });
           if (saved) {
-            setScreen('main');
+            setScreen('dev');
           }
           return saved;
         }}
         onUseCurrentLocation={async (name) => {
           const saved = await actions.useCurrentLocationAsDestination(name);
           if (saved) {
-            setScreen('main');
+            setScreen('dev');
           }
           return saved;
         }}
-        onBack={() => setScreen('destinations')}
+        onBack={() => setScreen('dev')}
       />
     );
-  } else if (screen === 'dev' && devToolsVisible) {
+  } else if (screen === 'dev') {
     content = (
       <DevLogScreen
         samples={state.samples}
@@ -178,18 +174,19 @@ export default function App(): ReactElement {
         devToolsVisible={devToolsVisible}
         onToggleMock={() => actions.toggleMockMode()}
         onSelectScenario={(id) => actions.selectScenario(id)}
+        onOpenCoordinateSetting={() => setScreen('add')}
         onBack={() => setScreen('main')}
       />
     );
   } else if (screen === 'map') {
     content = (
-      <ErrorBoundary onReturnToMain={() => setScreen('main')}>
+      <ErrorBoundary onReturnToMain={() => setScreen('destinations')}>
         <MapScreen
           currentPoint={state.location?.point ?? null}
           destinationName={selectedDestination?.name ?? null}
           destinationPoint={selectedDestination?.point ?? null}
           nav={nav}
-          onBack={() => setScreen('main')}
+          onBack={() => setScreen('destinations')}
         />
       </ErrorBoundary>
     );
@@ -199,16 +196,18 @@ export default function App(): ReactElement {
         <MainScreen
           nav={nav}
           destinationName={selectedDestination?.name ?? null}
+          destinationFavorite={null}
           gpsAccuracyM={state.location?.accuracyM ?? null}
-          headingAccuracyLevel={state.heading?.accuracy ?? null}
-          mockMode={state.mockMode}
-          devToolsVisible={devToolsVisible}
-          permissionNotice={permissionNotice}
-          onChangeDestination={() => setScreen('destinations')}
-          onOpenDestinations={() => setScreen('destinations')}
-          onOpenMap={() => setScreen('map')}
-          onOpenDevLog={() => setScreen('dev')}
-          onToggleMock={() => actions.toggleMockMode()}
+          permission={state.permission}
+          onOpenDestinationPicker={() => setScreen('destinations')}
+          onToggleFavorite={() => undefined}
+          onRequestPermission={() => {
+            void actions.retryPermission();
+          }}
+          onRetryLocation={() => {
+            void actions.retryPermission();
+          }}
+          onOpenDevMenu={() => setScreen('dev')}
         />
       </ErrorBoundary>
     );
@@ -217,7 +216,7 @@ export default function App(): ReactElement {
   return (
     <View style={[styles.root, { paddingTop: statusBarPaddingTop }]}>
       <ExpoStatusBar style="dark" />
-      <ScreenSwitcher screen={screen} onChange={setScreen} devToolsVisible={devToolsVisible}>
+      <ScreenSwitcher screen={screen} onChange={setScreen}>
         {content}
       </ScreenSwitcher>
     </View>

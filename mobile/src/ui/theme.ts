@@ -42,16 +42,22 @@ export const SPACING = {
   xl: 32,
 } as const;
 
-/** 文字サイズ。 */
+/** 文字サイズ。一般ユーザー向けに主要数値は 40pt 以上（UX-7）。 */
 export const FONT_SIZE = {
   caption: 12,
   body: 14,
   bodyLarge: 16,
+  button: 18,
   title: 20,
   heading: 24,
   display: 30,
   huge: 44,
+  /** 距離など「最大の文字」（UX-7: 主要数値 ≥ 40pt）。 */
+  hero: 48,
 } as const;
+
+/** タップ領域の最小サイズ（dp）。UX-7 / 受け入れ基準 6。 */
+export const TAP_TARGET_MIN = 48;
 
 /** 角丸。 */
 export const RADIUS = {
