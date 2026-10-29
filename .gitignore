@@ -41,3 +41,7 @@ mobile/coverage/
 # APK ビルド用ワークスペース内コピー（ジャンクション C:\w のターゲット）
 /b/
 
+
+# APK ビルド検証用コピー
+.apk-build/
+
