@@ -16,12 +16,18 @@ const PERMISSION_GRANTED: PermissionOutcome = {
  *
  * - 権限は常に許可（Mock は権限と独立に動く → §11.2）。
  * - `source: 'mock'`、受信時刻は注入された `Clock` から付与する（鮮度計算は単調時計の差分）。
- * - snapshot の変化時のみ `onFix` を呼ぶ。位置サンプルが無い間（GPS 欠損・未設定）は何も出さない。
+ * - **購読開始時に現在の snapshot を 1 回 emit する**（Mock ON 前に手動値が設定されている
+ *   ケースでも即座に反映するため）。
+ * - **手動モードでは「値が変わったときだけ」emit する**（位置と無関係な snapshot 変化＝
+ *   方位だけの変更などで同じ位置を再通知しない）。`force`（購読直後）は常に emit。
+ * - シナリオモードは従来どおり毎 commit emit する（鮮度更新・サンプル記録のため dedupe しない）。
+ * - 位置サンプルが無い間（GPS 欠損・未設定・stall）は何も出さない。
  */
 export class MockLocationProvider implements LocationProvider {
   readonly id = 'mock';
 
   private lastFix: SensorFix | null = null;
+  private lastEmitted: LocationReading | null = null;
 
   constructor(
     private readonly controller: MockSensorController,
@@ -41,21 +47,11 @@ export class MockLocationProvider implements LocationProvider {
     _onError: (error: ProviderError) => void,
   ): Promise<Unsubscribe> {
     const unsubscribe = this.controller.subscribe((snapshot) => {
-      const reading = readLocation(snapshot);
-      if (reading === null) {
-        return;
-      }
-      const fix: SensorFix = {
-        point: reading.point,
-        accuracyM: reading.accuracyM,
-        capturedAtEpochMs: null, // Mock はライブラリの測位時刻を持たない
-        receivedAtMonotonicMs: this.clock.nowMonotonicMs(),
-        receivedAtEpochMs: this.clock.nowEpochMs(),
-        source: 'mock',
-      };
-      this.lastFix = fix;
-      onFix(fix);
+      this.emitFromSnapshot(snapshot, onFix, false);
     });
+
+    // 購読直後に現在の snapshot を 1 回 emit（"値を適用 → Mock ON" の順でも最新値が出る）。
+    this.emitFromSnapshot(this.controller.getSnapshot(), onFix, true);
 
     let active = true;
     return Promise.resolve(() => {
@@ -70,11 +66,52 @@ export class MockLocationProvider implements LocationProvider {
   getLastKnown(): Promise<SensorFix | null> {
     return Promise.resolve(this.lastFix);
   }
+
+  private emitFromSnapshot(
+    snapshot: MockSensorSnapshot,
+    onFix: (fix: SensorFix) => void,
+    force: boolean,
+  ): void {
+    const reading = readLocation(snapshot);
+    if (reading === null) {
+      return;
+    }
+    // 手動モードでは同一値の再通知を抑止する（中間の null を出さないための dedupe）。
+    // シナリオモードは鮮度更新・記録のため毎回 emit する。
+    if (
+      !force &&
+      snapshot.mode === 'manual' &&
+      this.lastEmitted !== null &&
+      sameLocation(this.lastEmitted, reading)
+    ) {
+      return;
+    }
+    const fix: SensorFix = {
+      point: reading.point,
+      accuracyM: reading.accuracyM,
+      capturedAtEpochMs: null, // Mock はライブラリの測位時刻を持たない
+      receivedAtMonotonicMs: this.clock.nowMonotonicMs(),
+      receivedAtEpochMs: this.clock.nowEpochMs(),
+      source: 'mock',
+    };
+    this.lastEmitted = reading;
+    this.lastFix = fix;
+    onFix(fix);
+  }
 }
 
 interface LocationReading {
   readonly point: GeoPoint;
   readonly accuracyM: number | null;
+}
+
+/** 位置の同一性（座標と精度）。 */
+function sameLocation(a: LocationReading, b: LocationReading): boolean {
+  return (
+    a.point.latitude === b.point.latitude &&
+    a.point.longitude === b.point.longitude &&
+    a.accuracyM === b.accuracyM
+  );
 }
 
 /** snapshot から有効な位置サンプルを取り出す。無ければ null（サンプルを出さない）。 */

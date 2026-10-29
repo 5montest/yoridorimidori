@@ -125,6 +125,7 @@ describe('MockHeadingProvider', () => {
       (fix) => fixes.push(fix),
       () => undefined,
     );
+    fixes.length = 0; // 購読直後の初期通知（方位 null）を除外
     harness.controller.setManualHeading(0, 3, 'true-north');
     expect(fixes).toHaveLength(1);
     expect(fixes[0]).toEqual({
@@ -145,6 +146,7 @@ describe('MockHeadingProvider', () => {
       (fix) => fixes.push(fix),
       () => undefined,
     );
+    fixes.length = 0; // 購読直後の初期通知（方位 null）を除外
     harness.controller.setManualHeading(90, 3, 'true-north');
     harness.controller.setManualHeading(null, null, 'unknown');
     expect(fixes).toHaveLength(2);
@@ -161,6 +163,7 @@ describe('MockHeadingProvider', () => {
       (fix) => fixes.push(fix),
       () => undefined,
     );
+    fixes.length = 0; // 購読直後の初期通知（方位 null）を除外
     harness.controller.setManualHeading(10, 0, 'true-north');
     harness.controller.setManualHeading(20, 1, 'true-north');
     harness.controller.setManualHeading(30, 2, 'magnetic-north');
@@ -182,6 +185,7 @@ describe('MockHeadingProvider', () => {
       (fix) => fixes.push(fix),
       () => undefined,
     );
+    fixes.length = 0; // 購読直後の初期通知（方位 null）を除外
     harness.controller.setManualHeading(90, 2, 'true-north');
     stop();
     stop();
@@ -220,5 +224,137 @@ describe('MockHeadingProvider', () => {
     harness.controller.advance(1_000); // 1,500 ms >= stallAfterMs(1,000)
     expect(fixes).toHaveLength(1); // 追加通知なし
     stop();
+  });
+});
+
+describe('実機バグ回帰: 購読時の初期 emit と手動モード dedupe', () => {
+  it('購読直後に現在の手動位置が 1 回 emit される（"値を適用 → Mock ON" の順）', async () => {
+    const harness = makeHarness();
+    harness.controller.setManualLocation(TOKYO, 5); // Mock ON の前に適用
+    const fixes: SensorFix[] = [];
+    const stop = await harness.locationProvider.start(
+      (fix) => fixes.push(fix),
+      () => undefined,
+    );
+    expect(fixes).toHaveLength(1);
+    expect(fixes[0]).toMatchObject({ point: TOKYO, accuracyM: 5, source: 'mock' });
+    stop();
+  });
+
+  it('購読直後に現在の手動方位（実機の 104°）が 1 回 emit される', async () => {
+    const harness = makeHarness();
+    // 実機手順と同じ値: 緯度 35.68959 / 経度 139.70041 / 方位 104 / 精度 3 / 真北
+    harness.controller.setManualLocation({ latitude: 35.68959, longitude: 139.70041 }, 5);
+    harness.controller.setManualHeading(104, 3, 'true-north');
+    const fixes: HeadingFix[] = [];
+    const stop = await harness.headingProvider.start(
+      (fix) => fixes.push(fix),
+      () => undefined,
+    );
+    expect(fixes).toHaveLength(1);
+    expect(fixes[0]).toMatchObject({ headingDeg: 104, accuracy: 3, reference: 'true-north' });
+    expect(fixes[0]?.source).toBe('mock');
+    stop();
+  });
+
+  it('位置だけ変更しても heading は再 emit されない（実機バグ: 中間の null を出さない）', async () => {
+    const harness = makeHarness();
+    const fixes: HeadingFix[] = [];
+    const stop = await harness.headingProvider.start(
+      (fix) => fixes.push(fix),
+      () => undefined,
+    );
+    expect(fixes).toHaveLength(1); // 購読直後: 方位未設定 null を 1 回だけ通知
+    expect(fixes[0]?.headingDeg).toBeNull();
+
+    // 実機のバグ手順: setManualLocation → setManualHeading の順に適用する
+    harness.controller.setManualLocation({ latitude: 35.68959, longitude: 139.70041 }, 5);
+    expect(fixes).toHaveLength(1); // 位置だけの commit では null を再 emit しない
+    harness.controller.setManualHeading(104, 3, 'true-north');
+    expect(fixes).toHaveLength(2); // 方位は 1 回だけ届く
+    expect(fixes[1]).toMatchObject({ headingDeg: 104, accuracy: 3, reference: 'true-north' });
+    stop();
+  });
+
+  it('手動モードで heading を変更すると 1 回だけ emit され、無関係な変化では増えない', async () => {
+    const harness = makeHarness();
+    const fixes: HeadingFix[] = [];
+    const stop = await harness.headingProvider.start(
+      (fix) => fixes.push(fix),
+      () => undefined,
+    );
+    fixes.length = 0; // 購読直後の初期通知（null）を除外
+    harness.controller.setManualHeading(104, 3, 'true-north');
+    expect(fixes).toHaveLength(1);
+    harness.controller.setManualHeading(104, 3, 'true-north'); // controller は同一 snapshot を通知しない
+    expect(fixes).toHaveLength(1);
+    harness.controller.setManualLocation(TOKYO, 5); // 位置だけの変化は dedupe
+    expect(fixes).toHaveLength(1);
+    stop();
+  });
+
+  it('方位だけ変更しても位置は再 emit されない（manual dedupe）', async () => {
+    const harness = makeHarness();
+    const fixes: SensorFix[] = [];
+    const stop = await harness.locationProvider.start(
+      (fix) => fixes.push(fix),
+      () => undefined,
+    );
+    harness.controller.setManualLocation(TOKYO, 5);
+    expect(fixes).toHaveLength(1);
+    harness.controller.setManualHeading(90, 2, 'true-north'); // 無関係な変化
+    expect(fixes).toHaveLength(1);
+    harness.controller.setManualLocation(TOKYO, 6); // 精度が変わる → 再 emit
+    expect(fixes).toHaveLength(2);
+    stop();
+  });
+
+  it('scenario モードは毎 tick emit される（dedupe しない）', async () => {
+    const harness = makeHarness();
+    const locationFixes: SensorFix[] = [];
+    const stopLocation = await harness.locationProvider.start(
+      (fix) => locationFixes.push(fix),
+      () => undefined,
+    );
+    harness.controller.selectScenario('static');
+    locationFixes.length = 0;
+    harness.controller.advance(100);
+    expect(locationFixes).toHaveLength(1);
+    harness.controller.advance(100);
+    expect(locationFixes).toHaveLength(2); // 同じ値でも毎 commit emit
+    stopLocation();
+
+    const headingFixes: HeadingFix[] = [];
+    const stopHeading = await harness.headingProvider.start(
+      (fix) => headingFixes.push(fix),
+      () => undefined,
+    );
+    headingFixes.length = 0;
+    harness.controller.advance(100);
+    expect(headingFixes).toHaveLength(1);
+    harness.controller.advance(100);
+    expect(headingFixes).toHaveLength(2);
+    stopHeading();
+  });
+
+  it('購読直後: 位置が無ければ emit しない・方位は「不明」を 1 回通知する', async () => {
+    const harness = makeHarness();
+    const locationFixes: SensorFix[] = [];
+    const stopLocation = await harness.locationProvider.start(
+      (fix) => locationFixes.push(fix),
+      () => undefined,
+    );
+    expect(locationFixes).toHaveLength(0);
+
+    const headingFixes: HeadingFix[] = [];
+    const stopHeading = await harness.headingProvider.start(
+      (fix) => headingFixes.push(fix),
+      () => undefined,
+    );
+    expect(headingFixes).toHaveLength(1); // E-08: 方位不明も 1 回伝える
+    expect(headingFixes[0]?.headingDeg).toBeNull();
+    expect(headingFixes[0]?.reference).toBe('unknown');
+    stopLocation();
+    stopHeading();
   });
 });
