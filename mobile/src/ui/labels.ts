@@ -236,6 +236,57 @@ export function screenLabel(screen: ScreenId): string {
   }
 }
 
+// ── 開発用画面の表示整形（数値の再計算はせず、集計結果の整形だけを行う）────────
+
+/** サンプル時刻の表示（端末ローカル時刻の HH:MM:SS）。 */
+export function formatEpochClockTime(epochMs: number): string {
+  if (!Number.isFinite(epochMs)) {
+    return NO_VALUE;
+  }
+  const date = new Date(epochMs);
+  const hours = pad2(date.getHours());
+  const minutes = pad2(date.getMinutes());
+  const seconds = pad2(date.getSeconds());
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+/** 平均 GPS 精度の表示（例: `8.2 m（12 件）`）。 */
+export function sampleSummaryAverageGpsLabel(
+  averageGpsAccuracyM: number | null,
+  sampleCount: number,
+): string {
+  if (averageGpsAccuracyM === null || !Number.isFinite(averageGpsAccuracyM)) {
+    return `—（${sampleCount} 件）`;
+  }
+  const rounded = Math.round(averageGpsAccuracyM * 10) / 10;
+  return `${rounded} m（${sampleCount} 件）`;
+}
+
+/** 方位精度分布（0〜3）の表示。 */
+export function sampleSummaryHeadingDistributionLabel(
+  distribution: readonly [number, number, number, number],
+): string {
+  return `0: ${distribution[0]} 件 / 1: ${distribution[1]} 件 / 2: ${distribution[2]} 件 / 3: ${distribution[3]} 件`;
+}
+
+/** 古いサンプル率の表示（例: `25 %`）。 */
+export function sampleSummaryStaleRatioLabel(staleRatio: number | null): string {
+  if (staleRatio === null || !Number.isFinite(staleRatio)) {
+    return NO_VALUE;
+  }
+  return `${Math.round(staleRatio * 100)} %`;
+}
+
+/** 方位精度レベル（0〜3・null）の表示。 */
+export function headingAccuracyLevelLabel(level: 0 | 1 | 2 | 3 | null): string {
+  return level === null ? NO_VALUE : `${level}`;
+}
+
+function pad2(value: number): string {
+  return value < 10 ? `0${value}` : `${value}`;
+}
+
+
 // ── 画面の固定文言（文言はこのファイル以外に書かない）──────────────────────
 
 /** 画面・コンポーネントに表示する固定文言。 */
@@ -308,6 +359,9 @@ export const UI_TEXT = {
     errorsTitle: '直近エラー',
     back: 'ナビに戻る',
     noSummaryValue: NO_VALUE,
+    noSamplesHint: 'まだサンプルがありません（位置フィックスで記録されます）',
+    noErrors: 'エラーはありません',
+    noWarnings: '保存警告はありません',
   },
   /** Mock 操作パネル */
   mockControl: {
@@ -330,6 +384,7 @@ export const UI_TEXT = {
     scenarioNone: '手動（シナリオなし）',
     timeScaleTitle: '時間加速',
     devOnlyNote: '開発ビルドのみ表示しています',
+    enableHint: 'Mock ON の状態で「適用」すると値が反映されます',
     trueNorth: '真北',
     magneticNorth: '磁北',
     referenceUnknown: '不明',
