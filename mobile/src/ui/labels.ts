@@ -194,6 +194,20 @@ export function relativeDirectionLabel(relativeBearingDeg: number | null): strin
   return '真後ろ';
 }
 
+/** 相対方位の説明文（数値表示の補助。§9.2 の「目的地は右後ろ」）。 */
+export function relativeDirectionCaption(
+  relativeBearingDeg: number | null,
+  arrived: boolean,
+): string {
+  if (arrived) {
+    return '到着しました';
+  }
+  if (relativeBearingDeg === null || !Number.isFinite(relativeBearingDeg)) {
+    return '方位が分かりません';
+  }
+  return `目的地は${relativeDirectionLabel(relativeBearingDeg)}`;
+}
+
 /** 鳥のコンテナに付けるアクセシビリティ文言。§9.4 / NFR-08。 */
 export function birdAccessibilityLabel(
   relativeBearingDeg: number | null,
