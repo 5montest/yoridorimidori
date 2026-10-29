@@ -1,4 +1,4 @@
-import type { GpsAccuracyClass, HeadingAccuracyClass } from '../domain/types';
+﻿import type { GpsAccuracyClass, HeadingAccuracyClass } from '../domain/types';
 
 /**
  * テーマ（色・余白・文字サイズ）。§9.8。
@@ -55,6 +55,8 @@ export const FONT_SIZE = {
   huge: 44,
   /** 距離など「最大の文字」（UX-7: 主要数値 ≥ 40pt）。 */
   hero: 48,
+  /** メイン画面の距離（拡大版）。 */
+  heroLarge: 60,
 } as const;
 
 /** タップ領域の最小サイズ（dp）。UX-7 / 受け入れ基準 6。 */

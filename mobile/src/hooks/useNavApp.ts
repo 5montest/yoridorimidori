@@ -195,16 +195,10 @@ export function useNavApp(deps: NavAppDeps): NavApp {
           return;
         }
 
-        const first = seeded[0];
-        let selectedId: string | null = null;
-        if (first !== undefined) {
-          selectedId = first.id;
-          try {
-            await destinationRepository.writeSelection(first.id);
-          } catch {
-            dispatchStorageWarning('目的地の選択状態を保存できませんでした');
-          }
-        }
+        // 初回起動では目的地を**自動選択しない**（2026-10-30 変更）。
+        // メイン画面は「案内していない」状態（休んでいるオオハシ）で始まり、
+        // ユーザーが目的地を選ぶと案内が始まる。
+        const selectedId: string | null = null;
         if (disposed) {
           return;
         }

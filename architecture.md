@@ -2299,3 +2299,16 @@ readonly lastUsedAtEpochMs: number | null; // 最近使った順の基準。未�
 - 回転時に脚が上に来る見た目を避けるため、**脚を描かない版**に差し替えた。
 - ソース: `docs/assets/toucan-source-v2-2026-10-30.png`。加工は同じ（白フリンジ除去・トリミング・1024角・高さ88.5%・中央）。
 - `mobile/assets/toucan.png` は 308KB。`Bird.tsx` は無変更。
+
+---
+
+## 22. アプリアイコン（2026-10-30 差し替え）
+
+- 新オオハシ（`mobile/assets/toucan.png`）からアイコン一式を再生成:
+  - `icon.png`（1024・緑 #1F6F54 背景＋鳥66%）
+  - `android-icon-foreground.png`（透明・鳥56%・アダプティブのセーフゾーン内）
+  - `android-icon-background.png`（無地の緑）
+  - `android-icon-monochrome.png`（白シルエット・アルファ保持）
+  - `favicon.png`（192）、`splash-icon.png`（透明・鳥60%）
+- アダプティブアイコン設定（`app.json`）は変更なし。prebuild で mipmap が再生成される。
+- アイコン変更時は `npx expo prebuild --platform android --clean` → ビルド（JSのみの変更と違いネイティブ再生成が必要）。

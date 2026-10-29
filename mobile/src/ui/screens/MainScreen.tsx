@@ -16,8 +16,16 @@ import {
   TAP_TARGET_MIN,
 } from '../theme';
 import { Bird } from '../components/Bird';
+import { CompassRing } from '../components/CompassRing';
 import { DestinationChip } from '../components/DestinationChip';
 import { PrimaryButton } from '../components/PrimaryButton';
+
+/** 案内中のオオハシのサイズ（pt）。 */
+const BIRD_SIZE = 290;
+/** 未選択時（休んでいる姿）のサイズ（pt）。 */
+const SLEEPING_BIRD_SIZE = 300;
+/** 方位リングの直径（pt）。 */
+const RING_SIZE = 360;
 
 export interface MainScreenProps {
   /** 表示用の派生値（domain の計算結果。UI では再計算しない）。 */
@@ -144,11 +152,19 @@ export function MainScreen({
         ) : null}
 
         <View style={styles.birdArea}>
-          <Bird
-            relativeBearingDeg={nav.relativeBearingDeg}
-            arrived={arrived}
-            size={230}
-          />
+          <View style={styles.birdStage}>
+            {hasDestination ? (
+              <View style={styles.ringLayer} pointerEvents="none">
+                <CompassRing size={RING_SIZE} />
+              </View>
+            ) : null}
+            <Bird
+              relativeBearingDeg={nav.relativeBearingDeg}
+              arrived={arrived}
+              size={hasDestination ? BIRD_SIZE : SLEEPING_BIRD_SIZE}
+              pose={hasDestination ? 'standing' : 'sleeping'}
+            />
+          </View>
         </View>
 
         <View style={styles.readout}>
@@ -240,14 +256,30 @@ const styles = StyleSheet.create({
   birdArea: {
     alignItems: 'center',
     justifyContent: 'center',
+    flexGrow: 1,
     paddingVertical: SPACING.sm,
+  },
+  birdStage: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   readout: {
     alignItems: 'center',
     gap: SPACING.xs,
   },
   distance: {
-    fontSize: FONT_SIZE.hero,
+    fontSize: FONT_SIZE.heroLarge,
     fontWeight: '800',
     color: COLORS.text,
   },
@@ -262,10 +294,10 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   caption: {
-    fontSize: FONT_SIZE.bodyLarge,
+    fontSize: FONT_SIZE.title,
     color: COLORS.text,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 28,
   },
   stateCard: {
     backgroundColor: COLORS.surfaceAlt,

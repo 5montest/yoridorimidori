@@ -533,8 +533,16 @@ export const UI_TEXT = {
     positionLostTitle: '現在地が分からなくなりました',
     positionLostBody: '屋外に出るか、端末の位置情報がオンになっているか確認してください。',
     noDestinationBody: '目的地を選ぶと、オオハシが方向を教えます。',
+    sleepingBirdLabel: 'オオハシが休んでいます',
     headingUnknownBody: 'コンパスを準備しています。端末を軽く動かしてみてください。',
     devMenuHint: 'タイトルを長押し',
+  },
+  /** 方位リング（S2）*/
+  compassRing: {
+    front: 'まえ',
+    back: 'うしろ',
+    left: 'ひだり',
+    right: 'みぎ',
   },
   /** 状態の詳細（S6）*/
   statusDetail: {
