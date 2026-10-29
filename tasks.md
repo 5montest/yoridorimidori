@@ -1633,3 +1633,119 @@ adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
 - タスクの追加・順序変更が必要になった場合は、**依存関係（§1）と受け入れ基準（§6.4）を壊さないこと**を条件に、本書を更新してから実装する。
 - 各タスクの「完了条件」を満たさないまま次のタスクへ進まない（0.4）。実機でしか確認できない項目は D タスクで担保する。
 
+---
+
+## 9. Phase 4: UX 刷新・目的地設定（U01〜U15）
+
+> **背景（2026-10-30 ユーザー指示）**: 目的地設定が「座標の直打ち」で一般ユーザーに使えない。UI も開発者向けデバッグ画面になっている。
+> 一般ユーザーが説明なしで使える品質へ引き上げる。設計の正は [docs/ux-design.md](docs/ux-design.md)。
+> 前提 API の実現性は [docs/research/destination-ux-apis.md](docs/research/destination-ux-apis.md)。
+
+### 9.1 タスク一覧
+
+| ID | 名称 | 依存 | 規模 | 完了条件 |
+|---|---|---|---|---|
+| **U01** | 共有リンク・テキスト解析（純粋関数） | T01 | 中 | `parseSharedLocation` / `sortRecent` / `buildDestinationName` のテスト PASS |
+| **U02** | 型・ポート拡張 | U01 | 中 | `Destination` に favorite/lastUsedAt、`PlaceSearchProvider` / `ClipboardProvider` / `DeepLinkProvider` を定義。typecheck 0 |
+| **U03** | Expo アダプタ（検索・クリップボード・リンク） | U02 | 中 | インライン `jest.mock` で 3 アダプタのテスト PASS。外部 API は research の確定仕様のみ |
+| **U04** | リポジトリ拡張（favorite/lastUsedAt の永続化） | U02 | 中 | 既存データ補完・`markUsed`・お気に入り永続化のテスト PASS |
+| **U05** | `useDestinationPicker`（検索/最近/お気に入り/クリップボード/ディープリンク） | U03, U04 | 大 | 検索 debounce・0 件・失敗・二重送信防止のロジックテスト PASS |
+| **U06** | 目的地選択画面（S3） | U05, U13 | 大 | typecheck 0。検索・現在地・地図・最近・お気に入り・共有リンク導線が表示される |
+| **U07** | 地図で選ぶ画面（S4） | U06 | 中 | `MapView.onPress` で地点選択→逆ジオコーディング→確定。typecheck 0 |
+| **U08** | 検索結果 UI（S5） | U06 | 小 | 候補リスト・ローディング・0 件・失敗表示。typecheck 0 |
+| **U09** | メイン画面刷新（S2） | T22, U13 | 大 | 目的地チップ・大きな距離・8 方位の言葉・1 行サマリ・主要ボタン。デバッグ要素が常時表示されない |
+| **U10** | オンボーディング（S1） | U13 | 中 | 初回のみ 3 枚。スキップ可。再表示は開発メニューから |
+| **U11** | 開発メニュー隔離（S7） | T24, U13 | 中 | タイトル長押しで開発メニュー。座標入力・Mock・記録はここに移動。一般画面に露出しない |
+| **U12** | 状態詳細シート（S6） | U09 | 中 | 精度・鮮度・警告を一般向け文言で表示。数値は詳細のみ |
+| **U13** | 配線・ラベル・テーマ（App / labels / theme） | U06, U09 | 中 | 画面遷移・文言・色・余白の更新。typecheck 0 |
+| **U14** | 実機検証（新フロー） | U06-U13 | 中 | F2〜F6 の各フローを実機で確認し `docs/research/device-verification.md` に追記・スクショ保存 |
+| **U15** | ドキュメント更新 | U14 | 小 | requirements/architecture/tasks/README を UX 刷新に合わせて更新 |
+
+### 9.2 依存と並列化
+
+```
+U01 → U02 → U03 ─┐
+              U04 ─┴→ U05 ─→ U06 ─→ U07 / U08 ─┐
+U09（S2 刷新）・U10（S1）・U11（S7）・U12（S6）─┴→ U13 → U14 → U15
+```
+- **並列化**: `implementer`（データ層: U01〜U05）と `implementer2`（UI: U09〜U12 → U06〜U08）が並行可能。
+  UI 側は U02 の型・ポート確定後に U06〜U08 へ進む（それまでは U09〜U12 を実装）。
+- 依存追加（`expo-clipboard` / `expo-linking`）と `app.json` の `scheme` 追加は **Lead が実施済み**（U タスク内では依存追加しない）。
+
+### 9.3 主要な型・ポート契約（U02 で実装する内容）
+
+```ts
+// domain/types.ts（追加）
+interface Destination {
+  // 既存: id, name, point, createdAtEpochMs, origin
+  favorite: boolean;
+  lastUsedAtEpochMs: number | null;
+}
+
+// ports/placeSearch.ts
+interface PlaceCandidate {
+  id: string;
+  name: string;
+  address: string | null;
+  point: GeoPoint;
+  source: 'geocode' | 'reverse-geocode' | 'map';
+}
+interface PlaceSearchProvider {
+  isAvailable(): Promise<boolean>;
+  search(query: string): Promise<PlaceCandidate[]>;        // 0 件は []
+  reverse(point: GeoPoint): Promise<PlaceCandidate | null>;
+}
+
+// ports/clipboard.ts
+interface ClipboardProvider {
+  readText(): Promise<string | null>;   // 空/失敗は null（throw しない）
+}
+
+// ports/deepLink.ts
+interface DeepLinkProvider {
+  getInitialUrl(): Promise<string | null>;
+  subscribe(handler: (url: string) => void): Unsubscribe;
+}
+
+// ports/preferences.ts（追加: オンボーディング表示済みフラグ等）
+interface PreferencesRepository {
+  getOnboardingSeen(): Promise<boolean>;
+  setOnboardingSeen(seen: boolean): Promise<void>;
+}
+
+// ports/destinationRepository.ts（追加）
+markUsed(id: string): Promise<void>;   // lastUsedAtEpochMs を更新
+setFavorite(id: string, favorite: boolean): Promise<void>;
+```
+
+```ts
+// domain/shareLink.ts（U01）
+type SharedLocationKind = 'geo-uri' | 'google-maps-url' | 'coordinates';
+interface SharedLocation {
+  /** 座標が取れた場合のみ。短縮リンクは null（needsResolution=true） */
+  point: GeoPoint | null;
+  name: string | null;
+  kind: SharedLocationKind;
+  /** 短縮リンク（maps.app.goo.gl 等）。true のとき point は null で、アダプタが解決する */
+  needsResolution: boolean;
+}
+function parseSharedLocation(text: string): SharedLocation | null;
+function isShortMapLink(url: string): boolean;
+```
+
+### 9.4 共通ルール
+- §3 の共通ルール（`npm test` = `--runInBand`、`any` 禁止、domain の外部 import 禁止、`ui/` は hooks/adapters を import しない、文言は `ui/labels.ts`、`git add -A` 禁止）をすべて適用する。
+- 外部 API（expo-location geocode / expo-clipboard / expo-linking）は **`docs/research/destination-ux-apis.md` の確定仕様のみ**を使う。未確認 API を想像で実装しない。
+- **座標の TextInput を一般 UI に置かない**（開発メニューのみ）。
+- 既存の受入テスト（444 tests）を壊さない。UI 変更で不要になったテストは削除理由をコミットメッセージに書く。
+
+### 9.5 受け入れ基準（Phase 4）
+- [ ] 一般画面に緯度・経度の入力欄が存在しない
+- [ ] 地図タップ・検索・現在地・最近・お気に入り・クリップボード・ディープリンクで目的地を設定できる
+- [ ] メイン画面に Mock/記録/生の精度数値が常時表示されない
+- [ ] 開発メニューは隠し導線（タイトル長押し）からのみ到達できる
+- [ ] `npm run verify` 緑（既存 444 tests + 新規テスト）
+- [ ] 実機で F2〜F6 のフローが動作し、スクリーンショットが残っている
+- [ ] ネイティブ共有ターゲット（FR-17）は dev build 必須であることがドキュメント化されている
+
+

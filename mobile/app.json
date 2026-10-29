@@ -2,6 +2,7 @@
   "expo": {
     "name": "寄鳥美鳥地",
     "slug": "yoridorimidori",
+    "scheme": "yoridorimidori",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
