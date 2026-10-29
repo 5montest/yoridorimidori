@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "寄鳥美鳥地",
+    "slug": "yoridorimidori",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "jp.yoridorimidori.app"
+    },
+    "android": {
+      "package": "jp.yoridorimidori.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "現在地から目的地への方位を計算するために位置情報を使用します。",
+          "locationAlwaysAndWhenInUsePermission": "現在地から目的地への方位を計算するために位置情報を使用します。"
+        }
+      ]
+    ]
+  }
+}

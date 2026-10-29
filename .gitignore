@@ -1,0 +1,32 @@
+# 依存・生成物
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# ビルド成果物（CNG: npx expo prebuild で生成）
+/mobile/android/
+/mobile/ios/
+
+# ローカル検証・キャッシュ（DSH サンドボックス対策でワークスペース内に置く）
+.cache/
+.env-probe/
+.gradle/
+.android/
+.android-sdk/
+*.log
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# 環境変数・秘密情報
+.env
+.env.local
+.env.*.local
+google-services.json
+!google-services.example.json
