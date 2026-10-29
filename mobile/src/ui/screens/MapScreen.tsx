@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
+import Constants from 'expo-constants';
 import type { GeoPoint } from '../../domain/types';
 import { UI_TEXT } from '../labels';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, TAP_TARGET_MIN } from '../theme';
@@ -16,6 +17,23 @@ const DEFAULT_REGION = {
 
 /** 現在地だけ分かっているときの拡大率（度）。 */
 const SINGLE_POINT_DELTA = 0.01;
+
+/**
+ * 地図を描画できるか。
+ *
+ * - **Expo Go**（`storeClient`）は Expo Go 自身が Google Maps のキーを持つため描画できる。
+ * - **カスタムビルド（APK）** は `GOOGLE_MAPS_API_KEY` を指定してビルドした場合のみ描画できる。
+ *   キー無しで `MapView` を描画すると `IllegalStateException: API key not found` で**アプリが落ちる**ため、
+ *   `app.config.js` の `extra.hasGoogleMapsKey` を見て事前に分岐する。
+ */
+const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
+const HAS_MAPS_KEY: boolean = (() => {
+  if (IS_EXPO_GO) {
+    return true;
+  }
+  const extra = Constants.expoConfig?.extra as { readonly hasGoogleMapsKey?: boolean } | undefined;
+  return extra?.hasGoogleMapsKey === true;
+})();
 
 export interface MapScreenProps {
   /** 地図の初期中心（現在地。無ければ既定領域）。 */
@@ -42,6 +60,7 @@ export interface MapScreenProps {
  *   `showsMyLocationButton` / `liteMode`、`Marker` の `coordinate` / `title` / `identifier`。
  * - `showsUserLocation` は使わない（権限なしで無言失敗するため。ADR-10）。
  * - 座標は UI に出さない（UX-1）。確定操作は「この場所を目的地にする」。
+ * - **API キーが無いビルドでは地図を描画せず**、フォールバック案内を表示する（クラッシュ防止）。
  */
 export function MapScreen({
   initialPoint,
@@ -52,6 +71,10 @@ export function MapScreen({
   onConfirm,
   onBack,
 }: MapScreenProps): ReactElement {
+  if (!HAS_MAPS_KEY) {
+    return <MapUnavailable onBack={onBack} />;
+  }
+
   const region =
     selectedPoint !== null
       ? {
@@ -133,6 +156,29 @@ export function MapScreen({
   );
 }
 
+/** 地図が使えないビルド向けのフォールバック（クラッシュさせない）。 */
+function MapUnavailable({ onBack }: { readonly onBack: () => void }): ReactElement {
+  return (
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backIcon, pressed ? styles.pressed : null]}
+        >
+          <Text style={styles.backIconText}>←</Text>
+        </Pressable>
+        <Text style={styles.title}>{UI_TEXT.mapPick.title}</Text>
+      </View>
+      <View style={styles.fallbackCard}>
+        <Text style={styles.fallbackTitle}>{UI_TEXT.mapPick.unavailableTitle}</Text>
+        <Text style={styles.fallbackBody}>{UI_TEXT.mapPick.unavailableBody}</Text>
+        <PrimaryButton label={UI_TEXT.mapPick.back} onPress={onBack} variant="secondary" />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -187,6 +233,24 @@ const styles = StyleSheet.create({
   },
   selectedLabel: {
     fontSize: FONT_SIZE.bodyLarge,
+    color: COLORS.text,
+  },
+  fallbackCard: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+  },
+  fallbackTitle: {
+    fontSize: FONT_SIZE.title,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  fallbackBody: {
+    fontSize: FONT_SIZE.bodyLarge,
+    lineHeight: 24,
     color: COLORS.text,
   },
   pressed: {

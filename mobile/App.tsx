@@ -17,7 +17,12 @@ import { AsyncStorageSampleLogRepository } from './src/adapters/storage/AsyncSto
 import { DEFAULT_THRESHOLDS } from './src/domain/constants';
 import { filterFavorites, recentDestinations } from './src/domain/destinationOrder';
 import type { DestinationInput } from './src/domain/types';
+import {
+  resolveSharedText,
+  type ResolvedSharedDestination,
+} from './src/adapters/network/SharedTextResolver';
 import { useDestinationPicker } from './src/hooks/useDestinationPicker';
+import { useShareIntentBridge } from './src/hooks/useShareIntentBridge';
 import { selectSelectedDestination } from './src/hooks/selectors';
 import { useNavApp, type NavAppDeps } from './src/hooks/useNavApp';
 import type { ClipboardProvider } from './src/ports/clipboard';
@@ -218,6 +223,37 @@ export default function App(): ReactElement {
     onConfirm: confirmDestination,
     onToggleFavorite: toggleFavoriteById,
   });
+
+  // 共有インテント（FR-17）: 他アプリ（Google マップ等）から共有された地点を目的地にする。
+  // Expo Go では無効（payload は常に null）。APK / development build でのみ受信する。
+  const shareIntent = useShareIntentBridge();
+  const sharedText = shareIntent.payload?.text ?? null;
+  const [incomingShared, setIncomingShared] = useState<{
+    readonly kind: 'ready' | 'needs-resolution';
+    readonly destination: ResolvedSharedDestination | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (sharedText === null) {
+      return undefined;
+    }
+    let disposed = false;
+    void (async () => {
+      const resolved = await resolveSharedText(sharedText);
+      if (disposed) {
+        return;
+      }
+      setIncomingShared(
+        resolved === null
+          ? { kind: 'needs-resolution', destination: null }
+          : { kind: 'ready', destination: resolved },
+      );
+      shareIntent.clear();
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [sharedText, shareIntent]);
 
   // 初回起動のオンボーディング（S1）。表示済みフラグは PreferencesRepository（U03 アダプタ待ち）。
   useEffect(() => {
@@ -488,6 +524,22 @@ export default function App(): ReactElement {
         kind={deepLinkReady ? 'ready' : 'needs-resolution'}
         onConfirm={picker.actions.confirmShared}
         onDismiss={picker.actions.dismissShared}
+      />
+      <SharedDestinationSheet
+        visible={incomingShared !== null}
+        kind={incomingShared?.kind ?? 'needs-resolution'}
+        onConfirm={() => {
+          const destination = incomingShared?.destination ?? null;
+          setIncomingShared(null);
+          if (destination !== null) {
+            confirmDestination({
+              name: destination.name ?? UI_TEXT.destinationPicker.fallbackName,
+              point: destination.point,
+              origin: 'manual',
+            });
+          }
+        }}
+        onDismiss={() => setIncomingShared(null)}
       />
     </View>
   );

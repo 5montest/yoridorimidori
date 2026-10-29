@@ -1,4 +1,9 @@
-import { isShortMapLink, parseDeepLinkDestination, parseSharedLocation } from '../shareLink';
+import {
+  extractGoogleMapsPathCoordinates,
+  isShortMapLink,
+  parseDeepLinkDestination,
+  parseSharedLocation,
+} from '../shareLink';
 
 describe('isShortMapLink', () => {
   it('maps.app.goo.gl の URL を短縮リンクとして認識する', () => {
@@ -304,5 +309,27 @@ describe('parseDeepLinkDestination — アプリのディープリンク（UX �
       `yoridorimidori://set?lat=1&lon=2&name=${encodeURIComponent(longName)}`,
     );
     expect(result?.name).toHaveLength(50);
+  });
+});
+
+describe('parseSharedLocation: 解決済み Google マップ URL のパス座標', () => {
+  it('place リンクの !3d!4d から座標を取る', () => {
+    const result = parseSharedLocation(
+      'https://www.google.com/maps/place/%E6%9D%B1%E4%BA%AC%E3%82%BF%E3%83%AF%E3%83%BC/@35.6586,139.7454,17z/data=!4m6!3m5!1s0x0:0x0!8m2!3d35.6586!4d139.7454',
+    );
+    expect(result?.point).toEqual({ latitude: 35.6586, longitude: 139.7454 });
+  });
+
+  it('地図中心の @lat,lng は extractGoogleMapsPathCoordinates で取れる（parseSharedLocation は null のまま）', () => {
+    const url = 'https://www.google.com/maps/@35.681236,139.767125,15z';
+    expect(parseSharedLocation(url)).toBeNull();
+    expect(extractGoogleMapsPathCoordinates(url)).toEqual({
+      latitude: 35.681236,
+      longitude: 139.767125,
+    });
+  });
+
+  it('範囲外の座標は null', () => {
+    expect(extractGoogleMapsPathCoordinates('https://www.google.com/maps/@95.0,139.7,15z')).toBeNull();
   });
 });

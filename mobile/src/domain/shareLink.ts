@@ -260,7 +260,61 @@ function parseGoogleMapsUrl(url: string): ParsedCoordinates | null {
       return parsed;
     }
   }
+
+  // パス内の地点座標（place リンクの `!3d<lat>!4d<lng>`）。共有 URL の解決先で使われる形式。
+  const placeMatch = /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/u.exec(url);
+  if (placeMatch !== null) {
+    const point = toValidPoint(placeMatch[1], placeMatch[2]);
+    if (point !== null) {
+      return { point, name: null };
+    }
+  }
   return null;
+}
+
+/**
+ * Google マップ URL のパスから座標を取り出す（**共有 URL の解決専用**）。
+ *
+ * - `!3d<lat>!4d<lng>`（地点座標）を優先し、無ければ `/@<lat>,<lng>`（地図中心）を使う。
+ * - 通常の `parseSharedLocation` は `@` のみの URL を「座標を含まない」として扱う
+ *   （地図中心は共有地点と一致しないことがあるため）。短縮リンクの展開先だけこの関数で救済する。
+ */
+export function extractGoogleMapsPathCoordinates(url: string): GeoPoint | null {
+  if (typeof url !== 'string') {
+    return null;
+  }
+  const placeMatch = /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/u.exec(url);
+  if (placeMatch !== null) {
+    const point = toValidPoint(placeMatch[1], placeMatch[2]);
+    if (point !== null) {
+      return point;
+    }
+  }
+  const centerMatch = /\/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/u.exec(url);
+  if (centerMatch !== null) {
+    const point = toValidPoint(centerMatch[1], centerMatch[2]);
+    if (point !== null) {
+      return point;
+    }
+  }
+  return null;
+}
+
+/** 文字列の緯度・経度を範囲チェック付きで `GeoPoint` にする（不正は null）。 */
+function toValidPoint(
+  latitudeText: string | undefined,
+  longitudeText: string | undefined,
+): GeoPoint | null {
+  if (latitudeText === undefined || longitudeText === undefined) {
+    return null;
+  }
+  const latitude = Number(latitudeText);
+  const longitude = Number(longitudeText);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+  const point: GeoPoint = { latitude, longitude };
+  return isValidGeoPoint(point) ? point : null;
 }
 
 /** Google マップの URL か（`maps.google.*` か、`google.*` の `/maps` 配下）。 */

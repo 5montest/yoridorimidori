@@ -460,3 +460,25 @@ Get-Process -Name java,cmake,ninja -ErrorAction SilentlyContinue |
 ### 残課題
 - **release ビルド**は `expo-modules-core` の CMake が "manifest still dirty after 100 tries" ループで失敗（RelWithDebInfo 構成）。
   プロトタイプ配布は debug 署名版で可能。ストア配布は EAS Build を推奨。
+
+---
+
+## 10.6 地図（Google Maps API キー）と共有ターゲットのビルド設定（2026-10-30）
+
+### 地図を有効にする
+カスタムビルド（APK）では **Google Maps API キーが必須**（無いと MapView 描画時にネイティブクラッシュ）。
+mobile/app.config.js が GOOGLE_MAPS_API_KEY を読み、キーがある場合のみ eact-native-maps plugin を有効化する。
+
+`powershell
+$env:GOOGLE_MAPS_API_KEY = "<your key>"
+cd C:\w\app; npx expo prebuild --platform android --clean
+cd android; .\gradlew.bat assembleDebug --no-daemon
+`
+
+- キーが無い場合は extra.hasGoogleMapsKey=false が埋め込まれ、地図画面は**フォールバック案内**を表示（クラッシュしない）。
+- API キーは Google Cloud Console で **Maps SDK for Android** を有効化し、jp.yoridorimidori.app + 署名 SHA-1 を制限して発行する。
+
+### 共有ターゲット（Google マップ → 共有 → 寄鳥美鳥地）
+expo-share-intent@9.0.0 の config plugin を pp.config.js に追加済み（ndroidIntentFilters: ["text/*"]）。
+prebuild で ACTION_SEND / 	ext/* の intent-filter が AndroidManifest に追加され、共有シートにアプリが表示される。
+Expo Go では動作しない（APK / development build のみ）。
