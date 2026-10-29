@@ -1,4 +1,4 @@
-import { isShortMapLink, parseSharedLocation } from '../shareLink';
+import { isShortMapLink, parseDeepLinkDestination, parseSharedLocation } from '../shareLink';
 
 describe('isShortMapLink', () => {
   it('maps.app.goo.gl の URL を短縮リンクとして認識する', () => {
@@ -239,5 +239,70 @@ describe('parseSharedLocation — 複数 URL・優先順位', () => {
     );
     expect(result?.needsResolution).toBe(true);
     expect(result?.point).toBeNull();
+  });
+});
+
+describe('parseDeepLinkDestination — アプリのディープリンク（UX 設計 §F6）', () => {
+  const encodedName = encodeURIComponent('東京タワー');
+
+  it('yoridorimidori://set?lat=&lon=&name=（development build 形式）', () => {
+    expect(
+      parseDeepLinkDestination(
+        `yoridorimidori://set?lat=35.6586&lon=139.7454&name=${encodedName}`,
+      ),
+    ).toEqual({
+      point: { latitude: 35.6586, longitude: 139.7454 },
+      name: '東京タワー',
+    });
+  });
+
+  it('Expo Go の /--/set 形式', () => {
+    expect(
+      parseDeepLinkDestination(
+        `exp://127.0.0.1:8081/--/set?lat=35.6586&lon=139.7454&name=${encodedName}`,
+      ),
+    ).toEqual({
+      point: { latitude: 35.6586, longitude: 139.7454 },
+      name: '東京タワー',
+    });
+  });
+
+  it('https の /--/set 形式（任意 scheme）', () => {
+    expect(
+      parseDeepLinkDestination('https://example.com/--/set?lat=35.6586&lon=139.7454'),
+    ).toEqual({ point: { latitude: 35.6586, longitude: 139.7454 }, name: null });
+  });
+
+  it('name 省略時は null・+ は空白として復号される', () => {
+    expect(parseDeepLinkDestination('yoridorimidori://set?lat=1&lon=2')).toEqual({
+      point: { latitude: 1, longitude: 2 },
+      name: null,
+    });
+    expect(parseDeepLinkDestination('yoridorimidori://set?lat=1&lon=2&name=Tokyo+Tower')?.name).toBe(
+      'Tokyo Tower',
+    );
+  });
+
+  it('lat / lon 欠落・不正・範囲外は null', () => {
+    expect(parseDeepLinkDestination('yoridorimidori://set?lon=139.7')).toBeNull();
+    expect(parseDeepLinkDestination('yoridorimidori://set?lat=35.6')).toBeNull();
+    expect(parseDeepLinkDestination('yoridorimidori://set?lat=abc&lon=139.7')).toBeNull();
+    expect(parseDeepLinkDestination('yoridorimidori://set?lat=91&lon=139.7')).toBeNull();
+    expect(parseDeepLinkDestination('yoridorimidori://set?lat=35.6&lon=181')).toBeNull();
+  });
+
+  it('未知のパス・空文字・非文字列は null（throw しない）', () => {
+    expect(parseDeepLinkDestination('yoridorimidori://login?lat=1&lon=2')).toBeNull();
+    expect(parseDeepLinkDestination('yoridorimidori://set/sub?lat=1&lon=2')).not.toBeNull(); // set/ 配下は許可
+    expect(parseDeepLinkDestination('')).toBeNull();
+    expect(parseDeepLinkDestination(null as unknown as string)).toBeNull();
+  });
+
+  it('name は 50 文字に切り詰める', () => {
+    const longName = 'あ'.repeat(60);
+    const result = parseDeepLinkDestination(
+      `yoridorimidori://set?lat=1&lon=2&name=${encodeURIComponent(longName)}`,
+    );
+    expect(result?.name).toHaveLength(50);
   });
 });

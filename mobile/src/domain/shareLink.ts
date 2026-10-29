@@ -1,6 +1,6 @@
 import { buildDestinationName, extractCoordinatePair, extractUrls } from './placeCandidate';
 import type { GeoPoint } from './types';
-import { isValidGeoPoint } from './validation';
+import { DESTINATION_NAME_MAX_LENGTH, isValidGeoPoint } from './validation';
 
 /** 共有リンク・テキストの種類。 */
 export type SharedLocationKind = 'geo-uri' | 'google-maps-url' | 'coordinates';
@@ -106,6 +106,101 @@ export function parseSharedLocation(text: string): SharedLocation | null {
   }
 
   return null;
+}
+
+// ── ディープリンク（`set?lat=..&lon=..&name=..`） ──────────────────────────
+
+/** ディープリンクから取り出した目的地（U03 / U05）。 */
+export interface DeepLinkDestination {
+  readonly point: GeoPoint;
+  readonly name: string | null;
+}
+
+/**
+ * ディープリンク URL を解析する（UX 設計 §F6）。
+ *
+ * 対応形式（scheme は問わない。Expo Go / カスタムスキーム / https のいずれも同じ形）:
+ * - Expo Go: `exp://127.0.0.1:8081/--/set?lat=35.65&lon=139.74&name=東京タワー`
+ * - development build: `yoridorimidori://set?lat=35.65&lon=139.74&name=東京タワー`
+ *
+ * パスが `set`（`/--/set` を含む）で、`lat` / `lon` が有効な座標のときだけ返す。
+ * `name` は任意（無ければ null）。不正・範囲外・未知のパスは `null`（throw しない）。
+ */
+export function parseDeepLinkDestination(url: string): DeepLinkDestination | null {
+  if (typeof url !== 'string') {
+    return null;
+  }
+  const trimmed = url.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const withoutScheme = trimmed.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  const hashIndex = withoutScheme.indexOf('#');
+  const hashLess = hashIndex >= 0 ? withoutScheme.slice(0, hashIndex) : withoutScheme;
+  const queryIndex = hashLess.indexOf('?');
+  const beforeQuery = queryIndex >= 0 ? hashLess.slice(0, queryIndex) : hashLess;
+  const query = queryIndex >= 0 ? hashLess.slice(queryIndex + 1) : '';
+
+  if (!isSetPath(beforeQuery)) {
+    return null;
+  }
+  const params = parseQueryParams(query);
+  const latitude = parseNumberParam(params.get('lat'));
+  const longitude = parseNumberParam(params.get('lon'));
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+  const point: GeoPoint = { latitude, longitude };
+  if (!isValidGeoPoint(point)) {
+    return null;
+  }
+  return { point, name: decodeDeepLinkName(params.get('name')) };
+}
+
+/** パスが `set` か（`/--/set` 形式・host 直書きの両方に対応）。 */
+function isSetPath(withoutSchemeAndQuery: string): boolean {
+  const slashIndex = withoutSchemeAndQuery.indexOf('/');
+  const authority =
+    slashIndex >= 0 ? withoutSchemeAndQuery.slice(0, slashIndex) : withoutSchemeAndQuery;
+  const path = slashIndex >= 0 ? withoutSchemeAndQuery.slice(slashIndex) : '';
+  const devIndex = path.indexOf('/--/');
+
+  let candidate: string;
+  if (devIndex >= 0) {
+    candidate = path.slice(devIndex + 4);
+  } else if (path.length === 0) {
+    candidate = authority; // yoridorimidori://set
+  } else if (authority === 'set') {
+    candidate = `set${path}`; // yoridorimidori://set/...
+  } else {
+    candidate = path.replace(/^\/+/u, ''); // https://example.com/set
+  }
+  return candidate === 'set' || candidate === 'set/' || candidate.startsWith('set/');
+}
+
+function decodeDeepLinkName(value: string | undefined | null): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const cleaned = value.replace(/\s+/gu, ' ').trim();
+  if (cleaned.length === 0) {
+    return null;
+  }
+  return cleaned.length > DESTINATION_NAME_MAX_LENGTH
+    ? cleaned.slice(0, DESTINATION_NAME_MAX_LENGTH)
+    : cleaned;
+}
+
+function parseNumberParam(value: string | undefined | null): number | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const trimmedValue = value.trim();
+  if (trimmedValue.length === 0) {
+    return null;
+  }
+  const parsed = Number(trimmedValue);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 // ── geo: URI ───────────────────────────────────────────────────────────────
