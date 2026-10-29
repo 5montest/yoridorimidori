@@ -140,7 +140,7 @@ npx eas-cli@latest build -p android --profile preview    # 配布用 APK（inter
 - [x] M3: 状態管理・UI（T19〜T25・オオハシ表示・精度/鮮度パネル・目的地/開発画面）
 - [x] M4: 地図・仕上げ（T26〜T28・`react-native-maps` / 最終検証）
 - [x] 実機検証 D1〜D7（鳥の向き・権限フロー・再起動復元・オフライン・地図）
-- [x] 品質: **437 tests PASS / `tsc` 0 エラー / 本番バンドル生成 / 外部通信 0 件**
+- [x] 品質: **444 tests PASS / `tsc` 0 エラー / 本番バンドル生成 / 外部通信 0 件**
 - [ ] 配布ビルド（EAS Build）— Expo アカウントでの `eas login` が必要（[docs/deploy.md](docs/deploy.md)）
 
 ### 検証レポート

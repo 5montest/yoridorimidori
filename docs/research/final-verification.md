@@ -17,7 +17,7 @@
 
 | # | 検証項目 | 結果 | 根拠 |
 |---|---|---|---|
-| 1 | `npm run verify`（`tsc --noEmit` + `jest --runInBand`） | **✅ PASS** | tsc 0 エラー / **25 suites / 437 tests PASS** / 実行 約 9〜16 秒 |
+| 1 | `npm run verify`（`tsc --noEmit` + `jest --runInBand`） | **✅ PASS** | tsc 0 エラー / **25 suites / 444 tests PASS** / 実行 約 9〜16 秒 |
 | 2 | 本番バンドル生成 | **✅ PASS** | `npx expo export --platform android --max-workers 1 --no-bytecode` → `dist/metadata.json` + `dist/_expo/static/js/android/index-*.js`（**1,263 KB**） |
 | 3 | 外部通信の不在（NFR-02 / NFR-09） | **✅ PASS** | `src/**` に `fetch(` / `axios` / `XMLHttpRequest` / `WebSocket` / `http(s)://` は **0 件** |
 | 4 | 依存ルール（FR-12 / NFR-03） | **✅ PASS** | `react-native-maps` の import は `MapScreen.tsx` のみ / `ui/`→`hooks`・`adapters` import 0 件 / `domain/` の外部 import 0 件 |
@@ -35,7 +35,7 @@
 ### 3.1 テスト
 ```
 Test Suites: 25 passed, 25 total
-Tests:       437 passed, 437 total
+Tests:       444 passed, 444 total
 Time:        ~9.8 s（--runInBand）
 ```
 - 内訳: domain 211+ / adapters / hooks / ui(labels) / 境界条件 E-01〜E-15 を含む
@@ -106,7 +106,7 @@ dist/_expo/static/js/android/index-36c222ad....js     1,263 KB
 
 ```powershell
 cd mobile
-npm run verify                                                  # tsc + 437 tests
+npm run verify                                                  # tsc + 444 tests
 npx jest --runInBand --coverage                                 # カバレッジ
 npx expo export --platform android --max-workers 1 --no-bytecode # 本番バンドル
 # 実機（Metro + adb reverse + Expo Go）
