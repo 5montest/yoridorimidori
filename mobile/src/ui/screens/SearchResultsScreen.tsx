@@ -98,7 +98,7 @@ export function SearchResultsScreen({
                 <Text style={styles.cardAddress} numberOfLines={2}>
                   {result.address ?? UI_TEXT.searchResults.addressUnknown}
                 </Text>
-                <Text style={styles.cardAction}>{UI_TEXT.searchResults.title} ›</Text>
+                <Text style={styles.cardAction}>{`${UI_TEXT.searchResults.select} ›`}</Text>
               </Pressable>
             ))}
           </View>
