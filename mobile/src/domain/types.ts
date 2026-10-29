@@ -53,6 +53,10 @@ export interface Destination {
   readonly point: GeoPoint;
   readonly createdAtEpochMs: number;
   readonly origin: DestinationOrigin;
+  /** お気に入り（☆）。既定 false。 */
+  readonly favorite: boolean;
+  /** 最後に目的地として使った時刻（epoch ms）。未使用は null。 */
+  readonly lastUsedAtEpochMs: number | null;
 }
 
 /** 登録・更新の入力（ID と作成時刻は保存側が決める）。 */

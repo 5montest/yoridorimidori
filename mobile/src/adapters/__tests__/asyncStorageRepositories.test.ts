@@ -27,14 +27,16 @@ function makeIdFactory(): () => string {
 }
 
 function makeDestination(overrides: Partial<Destination> = {}): Destination {
-  return {
+  const base: Destination = {
     id: 'dest-1',
     name: '東京駅',
     point: TOKYO,
     createdAtEpochMs: EPOCH,
     origin: 'manual',
-    ...overrides,
+    favorite: false,
+    lastUsedAtEpochMs: null,
   };
+  return { ...base, ...overrides };
 }
 
 function makeSample(recordedAtEpochMs: number): SampleLogEntry {
@@ -73,6 +75,8 @@ describe('AsyncStorageDestinationRepository — CRUD と永続化', () => {
       point: TOKYO,
       createdAtEpochMs: EPOCH,
       origin: 'manual',
+      favorite: false,
+      lastUsedAtEpochMs: null,
     });
 
     const reopened = new AsyncStorageDestinationRepository(clock, ids);

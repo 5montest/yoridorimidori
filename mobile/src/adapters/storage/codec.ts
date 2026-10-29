@@ -212,7 +212,12 @@ function decodeDestination(value: unknown): Destination | null {
   if (point === null) {
     return null;
   }
-  return { id, name, point, createdAtEpochMs, origin };
+  // Phase 4（UX 刷新）で追加。既存データ（favorite / lastUsedAtEpochMs なし）は既定値で補完する（U04 の移行）。
+  const favorite = value.favorite === true;
+  const rawLastUsedAt = value.lastUsedAtEpochMs;
+  const lastUsedAtEpochMs =
+    typeof rawLastUsedAt === 'number' && Number.isFinite(rawLastUsedAt) ? rawLastUsedAt : null;
+  return { id, name, point, createdAtEpochMs, origin, favorite, lastUsedAtEpochMs };
 }
 
 function decodeSample(value: unknown): SampleLogEntry | null {

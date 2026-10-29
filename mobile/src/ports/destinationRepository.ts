@@ -33,6 +33,15 @@ export interface DestinationRepository {
   /** 選択中 id を保存。null で解除。存在しない id は保存しない（null 扱い）。 */
   writeSelection(id: string | null): Promise<void>;
 
+  /**
+   * 目的地として使ったことを記録する（`lastUsedAtEpochMs` を更新）。
+   * 存在しない id は無視する（throw しない）。時刻は実装が注入 `Clock` から決める。
+   */
+  markUsed(id: string): Promise<void>;
+
+  /** お気に入り（☆）の設定。存在しない id は無視する。 */
+  setFavorite(id: string, favorite: boolean): Promise<void>;
+
   /** 全消去（開発用リセット・テスト用）。 */
   clear(): Promise<void>;
 }

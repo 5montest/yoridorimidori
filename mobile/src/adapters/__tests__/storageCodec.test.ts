@@ -25,14 +25,16 @@ function expectOk<T>(result: DecodeResult<T>): { readonly value: T; readonly dro
 }
 
 function makeDestination(overrides: Partial<Destination> = {}): Destination {
-  return {
+  const base: Destination = {
     id: 'dest-1',
     name: '東京駅',
     point: { latitude: 35.681236, longitude: 139.767125 },
     createdAtEpochMs: 1_700_000_000_000,
     origin: 'manual',
-    ...overrides,
+    favorite: false,
+    lastUsedAtEpochMs: null,
   };
+  return { ...base, ...overrides };
 }
 
 function makeSample(overrides: Partial<SampleLogEntry> = {}): SampleLogEntry {

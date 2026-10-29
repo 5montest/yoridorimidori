@@ -62,7 +62,15 @@ function makeHeading(options: HeadingOptions = {}): HeadingFix {
 }
 
 function makeDestination(point: GeoPoint, name = '目的地'): Destination {
-  return { id: 'dest-1', name, point, createdAtEpochMs: EPOCH, origin: 'manual' };
+  return {
+    id: 'dest-1',
+    name,
+    point,
+    createdAtEpochMs: EPOCH,
+    origin: 'manual',
+    favorite: false,
+    lastUsedAtEpochMs: null,
+  };
 }
 
 /** 赤道上で `meters` だけ東に離れた点。距離の境界テスト用（float 誤差は 1e-9 程度）。 */

@@ -54,6 +54,8 @@ export class AsyncStorageDestinationRepository implements DestinationRepository 
         point: validated.value.point,
         createdAtEpochMs: this.clock.nowEpochMs(),
         origin: input.origin,
+        favorite: false,
+        lastUsedAtEpochMs: null,
       };
       await this.writeStore({
         items: [...store.items, destination],
@@ -115,6 +117,31 @@ export class AsyncStorageDestinationRepository implements DestinationRepository 
         items: store.items,
         selectedId: exists ? id : null,
       });
+    });
+  }
+
+  markUsed(id: string): Promise<void> {
+    return this.enqueue(async () => {
+      const store = await this.readStore();
+      if (!store.items.some((item) => item.id === id)) {
+        return; // 存在しない id は無視する
+      }
+      const usedAtEpochMs = this.clock.nowEpochMs();
+      const items = store.items.map((item) =>
+        item.id === id ? { ...item, lastUsedAtEpochMs: usedAtEpochMs } : item,
+      );
+      await this.writeStore({ items, selectedId: store.selectedId });
+    });
+  }
+
+  setFavorite(id: string, favorite: boolean): Promise<void> {
+    return this.enqueue(async () => {
+      const store = await this.readStore();
+      if (!store.items.some((item) => item.id === id)) {
+        return; // 存在しない id は無視する
+      }
+      const items = store.items.map((item) => (item.id === id ? { ...item, favorite } : item));
+      await this.writeStore({ items, selectedId: store.selectedId });
     });
   }
 

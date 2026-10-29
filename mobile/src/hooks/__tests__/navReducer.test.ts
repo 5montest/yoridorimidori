@@ -36,6 +36,9 @@ function makeDestination(id: string, name = id): Destination {
     point: { latitude: 35.681236, longitude: 139.767125 },
     createdAtEpochMs: 1_700_000_000_000,
     origin: 'manual',
+    // Phase 4（U02）で追加されたフィールド
+    favorite: false,
+    lastUsedAtEpochMs: null,
   };
 }
 

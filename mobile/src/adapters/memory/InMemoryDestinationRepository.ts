@@ -40,6 +40,8 @@ export class InMemoryDestinationRepository implements DestinationRepository {
       point: validated.value.point,
       createdAtEpochMs: this.clock.nowEpochMs(),
       origin: input.origin,
+      favorite: false,
+      lastUsedAtEpochMs: null,
     };
     this.items = [...this.items, destination];
     return Promise.resolve(destination);
@@ -85,6 +87,19 @@ export class InMemoryDestinationRepository implements DestinationRepository {
     // 存在しない id は保存しない（null 扱い）
     this.selectedId =
       id !== null && this.items.some((item) => item.id === id) ? id : null;
+    return Promise.resolve();
+  }
+
+  markUsed(id: string): Promise<void> {
+    const usedAtEpochMs = this.clock.nowEpochMs();
+    this.items = this.items.map((item) =>
+      item.id === id ? { ...item, lastUsedAtEpochMs: usedAtEpochMs } : item,
+    );
+    return Promise.resolve();
+  }
+
+  setFavorite(id: string, favorite: boolean): Promise<void> {
+    this.items = this.items.map((item) => (item.id === id ? { ...item, favorite } : item));
     return Promise.resolve();
   }
 

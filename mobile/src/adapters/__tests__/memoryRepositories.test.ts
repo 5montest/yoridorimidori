@@ -45,6 +45,8 @@ describe('InMemoryDestinationRepository', () => {
       point: TOKYO,
       createdAtEpochMs: 1_000,
       origin: 'preset',
+      favorite: false,
+      lastUsedAtEpochMs: null,
     });
 
     clock.advance(5_000);
