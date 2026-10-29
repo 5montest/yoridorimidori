@@ -333,6 +333,62 @@ export function onboardingPageLabel(current: number, total: number): string {
   return `${current} / ${total}`;
 }
 
+// ── 目的地設定（S3/S4/S5）の状態文言 ─────────────────────────────────────────
+
+/** 検索の状態（S5）。 */
+export type SearchStatus = 'idle' | 'loading' | 'success' | 'empty' | 'error';
+
+/** 検索の状態に応じた案内文（0 件・失敗時は「次に何をすればよいか」を 1 文で）。 */
+export function searchStatusMessageLabel(status: SearchStatus): string {
+  switch (status) {
+    case 'idle':
+      return '場所や住所を入力して検索してください';
+    case 'loading':
+      return '検索しています…';
+    case 'success':
+      return '';
+    case 'empty':
+      return '見つかりませんでした。地図から選ぶか、現在地を使ってください。';
+    case 'error':
+      return '検索できませんでした。通信状況を確認して、もう一度お試しください。';
+  }
+}
+
+/** 共有リンク取り込みの状態（タップ時読み取り。短縮リンクは解決しない）。 */
+export type ShareLinkState =
+  | 'idle'
+  | 'reading'
+  | 'no-url'
+  | 'invalid'
+  | 'success'
+  | 'network-required';
+
+/** 共有リンク取り込みの案内文。 */
+export function shareLinkMessageLabel(state: ShareLinkState): string {
+  switch (state) {
+    case 'idle':
+      return '';
+    case 'reading':
+      return 'リンクを読み取っています…';
+    case 'no-url':
+      return 'クリップボードにリンクがありません。Google マップなどで「リンクをコピー」してからお試しください。';
+    case 'invalid':
+      return 'リンクから場所を読み取れませんでした。座標を含むリンクをコピーし直してください。';
+    case 'success':
+      return 'コピーしたリンクから目的地を設定しました';
+    case 'network-required':
+      return '短縮リンクは読み取れません。Google マップで「リンクをコピー」し直してください。';
+  }
+}
+
+/** 検索結果の件数表示（Android の geocode は最大 1 件のため 0/1 前提）。 */
+export function searchResultCountLabel(count: number): string {
+  if (count <= 0) {
+    return '';
+  }
+  return count === 1 ? '1 件見つかりました' : `${count} 件見つかりました`;
+}
+
 /** 相対方位の説明文（数値表示の補助。§9.2 の「目的地は右後ろ」）。 */
 export function relativeDirectionCaption(
   relativeBearingDeg: number | null,
@@ -640,5 +696,51 @@ export const UI_TEXT = {
       '通常の目的地設定は「目的地を選ぶ」から地図・検索で行います。座標入力は開発用です。',
     logSection: '記録・Mock',
     onboardingReset: 'オンボーディングを再表示',
+  },
+  /** 目的地を選ぶ（S3）*/
+  destinationPicker: {
+    title: '目的地を選ぶ',
+    back: '戻る',
+    searchPlaceholder: '場所や住所を検索',
+    searchButton: '検索',
+    searchRequiresNetwork: '場所の検索にはインターネット接続が必要です',
+    useCurrentLocation: '現在地を目的地にする',
+    currentLocationUnavailable: '現在地が取得できていません',
+    currentLocationLost: '位置情報が途絶えているため現在地を使えません',
+    openMap: '地図から選ぶ',
+    recentTitle: '最近使った場所',
+    favoritesTitle: 'お気に入り',
+    noRecent: 'まだありません。目的地を選ぶとここに表示されます。',
+    noFavorites: '☆ を付けた場所がここに表示されます。',
+    otherMethodsTitle: 'その他の方法',
+    clipboardButton: 'コピーしたリンクから設定',
+    clipboardHint: 'Google マップの「リンクをコピー」などで共有できます',
+  },
+  /** 検索結果（S5）*/
+  searchResults: {
+    title: '検索結果',
+    back: '戻る',
+    loading: '検索しています…',
+    successCountSuffix: '件',
+    emptyTitle: '見つかりませんでした',
+    emptyBody: '地図から選ぶか、現在地を使って目的地を設定できます。',
+    errorTitle: '検索できませんでした',
+    errorBody: '通信状況を確認して、もう一度お試しください。',
+    retry: 'もう一度検索',
+    openMap: '地図から選ぶ',
+    useCurrentLocation: '現在地を使う',
+    addressUnknown: '住所は取得できませんでした',
+  },
+  /** 地図で選ぶ（S4）*/
+  mapPick: {
+    title: '地図で選ぶ',
+    back: '戻る',
+    instruction: '地図をタップして目的地を選びます',
+    selectedLabel: '選択中',
+    resolving: '場所を調べています…',
+    noSelection: '地図をタップすると場所が決まります',
+    confirm: 'この場所を目的地にする',
+    webFallback: '地図はこのプラットフォームでは表示できません',
+    webFallbackBody: 'Android / iOS の実機でご利用ください。',
   },
 } as const;

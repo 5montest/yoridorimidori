@@ -27,6 +27,9 @@ import {
   onboardingPageLabel,
   relativeDirectionLabel,
   screenLabel,
+  searchResultCountLabel,
+  searchStatusMessageLabel,
+  shareLinkMessageLabel,
   statusSummaryLine,
   validationErrorLabel,
   warningLabel,
@@ -267,6 +270,48 @@ describe('一般ユーザー向けの言い換え（UX-4 / UX-8）', () => {
 
   it('onboardingPageLabel: ページ番号を返す', () => {
     expect(onboardingPageLabel(1, 3)).toBe('1 / 3');
+  });
+});
+
+describe('目的地設定の状態文言（U06 / U08）', () => {
+  it('searchStatusMessageLabel: 0 件・失敗時の次の一手を含む', () => {
+    const statuses = ['idle', 'loading', 'success', 'empty', 'error'] as const;
+    statuses.forEach((status) => {
+      if (status === 'success') {
+        expect(searchStatusMessageLabel(status)).toBe('');
+      } else {
+        expectNonEmpty(searchStatusMessageLabel(status));
+      }
+    });
+    expect(searchStatusMessageLabel('empty')).toContain('地図から選ぶ');
+    expect(searchStatusMessageLabel('error')).toContain('通信状況');
+  });
+
+  it('shareLinkMessageLabel: 失敗時にコピーし直しを案内する', () => {
+    const states = [
+      'idle',
+      'reading',
+      'no-url',
+      'invalid',
+      'success',
+      'network-required',
+    ] as const;
+    states.forEach((state) => {
+      if (state === 'idle') {
+        expect(shareLinkMessageLabel(state)).toBe('');
+      } else {
+        expectNonEmpty(shareLinkMessageLabel(state));
+      }
+    });
+    expect(shareLinkMessageLabel('no-url')).toContain('コピー');
+    expect(shareLinkMessageLabel('invalid')).toContain('コピー');
+    expect(shareLinkMessageLabel('network-required')).toContain('コピー');
+  });
+
+  it('searchResultCountLabel: 0/1 件を自然に表示する', () => {
+    expect(searchResultCountLabel(0)).toBe('');
+    expect(searchResultCountLabel(1)).toContain('1 件');
+    expect(searchResultCountLabel(2)).toContain('2 件');
   });
 });
 
