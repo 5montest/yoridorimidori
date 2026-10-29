@@ -1,9 +1,8 @@
 import { useEffect, useRef, type ReactElement } from 'react';
-import { Animated, Easing, StyleSheet, useAnimatedValue } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { Animated, Easing, Image, StyleSheet, useAnimatedValue } from 'react-native';
 import { nextContinuousAngleDeg, reduceContinuousAngle } from '../../domain/rotation';
 import { birdAccessibilityLabel } from '../labels';
-import { TOUCAN_PATHS, TOUCAN_VIEWBOX } from './toucanPaths';
+import toucanImage from '../../../assets/toucan.png';
 
 /** 回転アニメーションの時間（ms）。§9.3 / NFR-07。 */
 const ROTATION_DURATION_MS = 250;
@@ -22,9 +21,12 @@ export interface BirdProps {
 /**
  * オオハシ（トゥーカン）のマスコット。§9.3 / T22。
  *
- * - パスデータは designer 提供の `toucanPaths.ts`（viewBox `0 0 100 100`・クチバシ上向き）。
- * - 回転は**外側の `Animated.View` の `transform: rotate`** で行う。
- *   `react-native-svg` の props に `Animated.Value` を渡さない（文字列化され解釈されない。§18-1）。
+ * - 画像は designer 提供の **`mobile/assets/toucan.png`**（1024x1024 / RGBA 透過 / クチバシ上向き）。
+ *   viewBox `0 0 100 100` と同一レイアウトで描画されているため、`size` をそのまま width/height に使える。
+ * - **`react-native-svg` は使わない**（2026-10-30 変更）。理由: Android の new-arch codegen
+ *   (`react_codegen_rnsvg`) が Windows の 260 文字パス制限に抵触し、ローカル APK ビルドが失敗するため。
+ *   PNG 画像なら codegen が不要になり、ビルドが通る（見た目は SVG 版とほぼ同一）。
+ * - 回転は**外側の `Animated.View` の `transform: rotate`** で行う（`Image` に Animated 値を渡さない）。
  * - `nextContinuousAngleDeg` で最短経路の累積角度を求め、`reduceContinuousAngle` で ±720° に収める。
  * - ニュートラル（相対方位 null）・到着時は目標 0°（上向き）。
  * - 初回マウントはアニメーションせず即時設定（ちらつき防止）。
@@ -93,11 +95,12 @@ export function Bird({ relativeBearingDeg, arrived, size = 220 }: BirdProps): Re
       accessibilityLabel={birdAccessibilityLabel(relativeBearingDeg, arrived)}
       style={[styles.container, { width: size, height: size, transform: [{ rotate }] }]}
     >
-      <Svg width={size} height={size} viewBox={TOUCAN_VIEWBOX}>
-        {TOUCAN_PATHS.map((path, index) => (
-          <Path key={`toucan-path-${index}`} d={path.d} fill={path.fill} />
-        ))}
-      </Svg>
+      <Image
+        source={toucanImage}
+        style={[styles.image, { width: size, height: size }]}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
     </Animated.View>
   );
 }
@@ -106,5 +109,9 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  image: {
+    // PNG は viewBox と同一レイアウト（鳥＝高さ約 88%・水平中央）なので追加の拡大は不要。
+    transform: [],
   },
 });

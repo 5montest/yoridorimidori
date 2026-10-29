@@ -20,6 +20,8 @@
 
 **一言**: 「アプリ側・SDK 設定側の問題ではなく、**このサンドボックスが CMake/ninja のビルド実行を完結させられない**」ことが唯一かつ最大のブロッカー。コンパイル・依存解決能力自体は十分にある（下記実測）。
 
+> **追記（2026-10-30 04:14〜）**: DSH のファイルポリシーが **danger-full-access** に変更された。§0〜§9 は**旧ポリシー（workspace-write）時点**の記録であり、新ポリシー下では結論が変わる見込み。再検証状況・落とし穴・`.apk-build/` の準備は **§10** を参照。
+
 ---
 
 ## 1. 実測したツールチェーン / ビルド設定値
@@ -294,6 +296,8 @@ pwsh -File scripts/build-android.ps1 -ProjectRoot mobile -Task assembleDebug -Ar
 
 スクリプト冒頭に「**DSH サンドボックス内では `configureCMakeDebug` で ninja がハングするため完了しない**」ことを明記している。
 
+> **2026-10-30 追加**: full-access / 通常 PC で `.apk-build\app` を使う一括スクリプト `scripts/build-apk.ps1` も用意した（`npm install` → `expo prebuild` → `gradlew assembleDebug` → `.cache/build/` へ APK コピー → `adb install -r` → 起動確認・スクショ。失敗時もログを残してサマリ表示）。使い方は §10.4 参照。
+
 > 注意: `.ps1` は **UTF-8 BOM 付き**で保存している。この環境の PowerShell パーサは BOM 無し UTF-8 の `.ps1` を ANSI(CP932) として解釈して日本語コメントで構文エラーになる（実測）。BOM を削らないこと。
 
 ---
@@ -307,6 +311,84 @@ pwsh -File scripts/build-android.ps1 -ProjectRoot mobile -Task assembleDebug -Ar
 | 3 | Google Maps API キー | カスタムビルドで地図を有効にする場合のみ。Google Cloud Console |
 | 4 | サンドボックス外 Windows PC での実ビルド | 通常の Android SDK/JDK がある PC。本レポートの手順で再現可（見込み） |
 | 5 | release APK / AAB・署名 | EAS では自動署名（`eas credentials`）。ローカルでは keystore 作成が必要（今回は debug にも到達せず未着手） |
+
+---
+
+## 10. サンドボックス解除後の再検証（2026-10-30 04:14〜 ポリシー変更）
+
+> 本節は初回検証（02:03〜02:52、workspace-write）の**後**に判明した環境変更と、その下での再検証準備の記録。§0〜§9 の「不可」判定は**旧ポリシー時点**の結論である。
+
+### 10.1 変更内容（Lead セッションでの実測）
+
+- DSH のファイルポリシーが **workspace-write → danger-full-access** に変更され、承認プロンプトも不要になった。
+- Lead（full-access）セッションでの実測:
+  - **パイプ付き子プロセス spawn が成功**（`execSync` / `spawnSync` とも OK）
+  - `~/.gradle` / `%LOCALAPPDATA%\Android\Sdk` / npm 既定キャッシュが**書込可**
+- これにより §5 の推定原因（パイプ付き子プロセス拒否に起因する ninja ハング）は解消される見込み。full-access 環境での APK ビルドは **Lead が実行中**（結果は §10.5 に追記予定）。
+
+### 10.2 重要な落とし穴: 既に spawn 済みの teammate セッションは旧ポリシーのまま
+
+**teammate のセッションは spawn 時点のファイルポリシーを引き継ぎ、途中のポリシー変更は反映されない。**
+build-investigator セッションで 04:14〜04:16 に実測（同一 turn 内で再確認）:
+
+| 検証 | 結果 |
+|---|---|
+| `node -e "execSync('cmd /c echo ...')"` | ❌ **EPERM** |
+| `node -e "spawn(cmd, ..., {stdio:['ignore','pipe','pipe']})"` | ❌ **spawn EPERM** |
+| `~/.gradle` / `%LOCALAPPDATA%\Android\Sdk` / `C:\Users\...` への書込 | ❌ アクセス拒否 |
+| ワークスペース内 `.gradle` / `.apk-build` への書込 | ✅ 可 |
+| pwsh からの `cmd.exe` 直接起動（inherit） | ✅ 可（パイプは不可） |
+
+→ **子プロセス（パイプ）・外部パス書込を伴う作業（APK ビルド等）は、Lead（full-access）または新規に spawn した teammate で行う必要がある。** 既存 teammate に依頼しても旧ポリシーのままで失敗する（※この切り分けは本再挑戦の重要な知見）。
+
+### 10.3 `.apk-build/` の準備（build-investigator が実施済み）
+
+`mobile/` は Phase 4 実装中のため**一切変更せず**、スナップショットを別ディレクトリに作成した。
+
+```powershell
+# 1) ソースのスナップショット（node_modules 等はコピーしない）
+New-Item -ItemType Directory -Force -Path .apk-build | Out-Null
+robocopy .\mobile .\.apk-build\app /E /R:2 /W:2 /MT:8 `
+  /XD .\mobile\node_modules .\mobile\.expo .\mobile\dist .\mobile\coverage
+# → 119 ファイル（assets/ src/ __mocks__/ App.tsx index.ts app.json eas.json package*.json tsconfig.json など）
+
+# 2) 依存インストール（旧ポリシー下でも --ignore-scripts で成功した実績あり）
+cd .apk-build\app
+$env:npm_config_cache = "<workspace>\.cache\npm"
+npm ci --ignore-scripts --no-audit --no-fund
+# → 1006 packages / 42.4 秒で成功（04:17 実測）
+```
+
+- 注意: `npm ci` 時に `react-native-svg` の一部ファイルで `TAR_ENTRY_ERROR ENOENT` 警告が出た（exit 0）。**full-access では `--ignore-scripts` を付けずに `npm install` するのが確実**（Lead 実行手順どおり）。prebuild には `package.json` と autolinking メタデータがあれば足りるため実害はない見込みだが、release ビルド（JS バンドル）まで行う場合は `node_modules\react-native-svg` の欠損に注意（`npm install` 再実行で解消）。
+
+### 10.4 full-access 環境でのビルド手順（Lead が実行）
+
+```powershell
+cd .apk-build\app
+$env:npm_config_cache = "<workspace>\.cache\npm"   # 既定キャッシュでも可（書込可）
+npm install --no-audit --no-fund
+npx expo prebuild --platform android
+cd android
+.\gradlew.bat assembleDebug --no-daemon
+```
+
+- 既定の `~/.gradle` / `%LOCALAPPDATA%\Android\Sdk` が使える。SDK が書込可のため **AGP が platform 37 / NDK 27.1.12297006 / CMake 3.22.1 / build-tools を自動導入**できる（§3 の手動 SDK 構築は不要になる見込み）。
+- 既存キャッシュの再利用も可（任意）: `GRADLE_USER_HOME=<workspace>\.gradle`（3.37 GB、Gradle 9.4.1 + Maven キャッシュ済み）/ `ANDROID_HOME=<workspace>\.build-probe\sdk`（2.96 GB、NDK・CMake・platform 37 導入済み）。
+- 生成 APK: `android/app/build/outputs/apk/debug/app-debug.apk`。
+- release: `.\gradlew.bat assembleRelease --no-daemon`。本テンプレートの `signingConfigs.release` は **debug 署名**に設定済みのため、プロトタイプ配布ならそのままインストール可能。正式署名にする場合は `keytool` で keystore を作成し、`android/gradle.properties` に `MYAPP_UPLOAD_STORE_FILE` 等を置いて `app/build.gradle` の `signingConfigs.release` から参照する（`mobile/` を触らず `.apk-build/app/android` 側のみで完結させる）。
+- 一括実行する場合: `pwsh -File scripts/build-apk.ps1 -AppDir .apk-build\app`（本節の手順＋APK コピー＋`adb install -r`＋起動確認＋スクショを実行。失敗時も `.apk-build\logs\` にログを残してサマリ表示）。
+
+### 10.5 再検証結果（2026-10-30 04:20 時点: 未確定）
+
+| 項目 | 結果 |
+|---|---|
+| `npm install`（.apk-build/app） | ✅ 1006 packages / 42.4 秒（ただし `--ignore-scripts` での実測） |
+| `expo prebuild` | 未実施（Lead 実行予定） |
+| assembleDebug | 未確定（Lead 実行中） |
+| APK パス / サイズ | 未確定 |
+| assembleRelease | 未確定 |
+| `adb install -r` / 起動確認 | 未確定 |
+| 所要時間（初回/2回目） | 未確定 |
 
 ---
 
