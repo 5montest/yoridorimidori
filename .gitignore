@@ -17,6 +17,7 @@ home/
 .gradle/
 .android/
 .android-sdk/
+docs/research/_sources*/
 *.log
 
 # OS / エディタ

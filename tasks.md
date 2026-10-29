@@ -1171,8 +1171,8 @@ npx expo export --platform android --max-workers 1 --no-bytecode
 **目的**: 現在地と目的地を 1 画面に収める地図表示領域の計算を、`react-native-maps` に依存しない純粋関数として実装する（§9.6）。
 
 **変更・追加ファイル**
-- `mobile/src/ui/mapRegion.ts`（新規）— 自前型 `MapRegion`（`{ latitude, longitude, latitudeDelta, longitudeDelta }`）と `regionForPoints`
-- `mobile/src/ui/__tests__/mapRegion.test.ts`（新規）
+- `mobile/src/domain/mapRegion.ts`（新規）— 自前型 `MapRegion`（`{ latitude, longitude, latitudeDelta, longitudeDelta }`）と `regionForPoints`
+- `mobile/src/domain/__tests__/mapRegion.test.ts`（新規）
 
 **実装内容の要点**（§9.6 / §18-12）
 - `regionForPoints(a, b): MapRegion | null`。中心は 2 点の中点。既定の倍率 `2.5`、最小ズーム `0.005`（`latitudeDelta = max(|Δlat| * 2.5, 0.005)`、`longitudeDelta = max(|Δlon| * 2.5, 0.005)`）
@@ -1185,7 +1185,7 @@ npx expo export --platform android --max-workers 1 --no-bytecode
 - [ ] 2 点の中点が中心になる
 - [ ] 不正座標で `null`
 
-**単体テスト**: `mobile/src/ui/__tests__/mapRegion.test.ts`
+**単体テスト**: `mobile/src/domain/__tests__/mapRegion.test.ts`
 - 同一地点: 中心がその点、`latitudeDelta` / `longitudeDelta` が `>= 0.005`
 - 2 点: 中心が中点（`toBeCloseTo`）、`latitudeDelta >= |Δlat| * 2.5` かつ `>= 0.005`
 - 不正: `latitude: NaN` / 範囲外 → `null`
@@ -1559,7 +1559,7 @@ adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
 | `mobile/src/adapters/__tests__/mockSensor.test.ts` | T12 | 追加（§17 P6 のテスト） |
 | `mobile/src/adapters/__tests__/mockProviders.test.ts` | T13 | 追加（§17 P6 のテスト） |
 | `mobile/src/adapters/__tests__/headingStrategy.test.ts` | T17 | 追加（§5.2 の純粋化） |
-| `mobile/src/ui/__tests__/mapRegion.test.ts` | T26 | 追加（§9.6「テスト可能にする」） |
+| `mobile/src/domain/__tests__/mapRegion.test.ts` | T26 | 追加（§9.6「テスト可能にする」） |
 
 ---
 

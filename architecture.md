@@ -1593,7 +1593,7 @@ export const DEMO_SCENARIO_ID: ScenarioId;   // 既定: 'static'
   - `Marker`: `coordinate`, `title`, `identifier`（現在地用・目的地用）
 - **`showsUserLocation` は使わない**（【確定】権限が無いと**無言で失敗**するため）。現在地は**自前の `Marker`** を `SensorFix` から描画する。
 - **Google Maps API キー**: Expo Go では不要（【確定】）。カスタムビルドでは必須で、無いと**空白/グレー**（クラッシュではない、README 記載）。空白を検知する API は無いため、**画面に「地図が表示されない場合は API キー未設定です」注記**を常設し、`[方位表示に戻る]` を出す（アプリは壊れない）。キー注入は `app.config.ts` + 環境変数が必要になるが、`process` の型（`@types/node`）が無いため **現時点では実装しない（§付録A-4）**。
-- `Region` 計算は純粋関数 `ui/mapRegion.ts` の `regionForPoints(a, b): { latitude, longitude, latitudeDelta, longitudeDelta }` として切り出し、テスト可能にする。既定 `latitudeDelta = max(|Δlat| * 2.5, 0.005)` 等、最小ズームを保証する。
+- `Region` 計算は純粋関数 **`domain/mapRegion.ts`** の `regionForPoints(a, b): { latitude, longitude, latitudeDelta, longitudeDelta }` として切り出し、テスト可能にする（**2026-10-30 変更**: 当初 `ui/mapRegion.ts` としていたが、純粋関数のため domain へ移動）。既定 `latitudeDelta = max(|Δlat| * 2.5, 0.005)` 等、最小ズームを保証する。日付変更線をまたぐ（`|Δlon| > 180`）場合は最短の経度幅を採用する。
 - 現在地が無い場合は地図を開かずフォールバック文言を出す（`MapScreen` 内でも `location === null` をガード）。
 
 ### 9.7 開発用画面（FR-09 / FR-10）
@@ -1926,6 +1926,7 @@ mobile/
     │   ├── scenario.ts           # シナリオ定義・純粋なサンプリング（§8.4）
     │   ├── presets.ts            # デモ用プリセット目的地（§10.6）
     │   ├── summarize.ts          # サンプルの簡易集計（FR-09）
+    │   ├── mapRegion.ts          # 地図 Region 計算（純粋・T26）
     │   └── __tests__/            # §12.2（domain のテスト。RN import 禁止）
     ├── ports/                    # ★契約（interface / type のみ）
     │   ├── common.ts             # Unsubscribe / ProviderError / PermissionOutcome
@@ -1982,7 +1983,6 @@ mobile/
         │   └── ErrorBoundary.tsx
         ├── labels.ts                     # 日本語文言（純粋関数・テスト対象）
         ├── theme.ts                      # 色・余白・文字サイズ
-        ├── mapRegion.ts                  # Region 計算（純粋）
         └── __tests__/
 ```
 

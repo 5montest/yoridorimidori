@@ -32,7 +32,8 @@
 | [requirements.md](requirements.md) | 要件定義（機能・非機能・境界条件・受け入れ基準） |
 | [architecture.md](architecture.md) | アーキテクチャ設計（レイヤ・インターフェース・テスト戦略） |
 | [tasks.md](tasks.md) | 実装タスク分解（1タスクずつ実装・テスト） |
-| [docs/research/](docs/research/) | ライブラリ API の一次情報調査・PC 構築実証 |
+| [docs/deploy.md](docs/deploy.md) | **デプロイ手順**（EAS Build で配布用 APK/AAB を作る） |
+| [docs/research/](docs/research/) | ライブラリ API の一次情報調査・PC 構築実証・本番ビルド可否検証 |
 
 ## リポジトリ構成
 
@@ -113,10 +114,30 @@ adb shell am start -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
 - 端末側には **Expo Go（SDK 58 版）** が必要（`expo.dev/go` の APK を `adb install -r` で導入済み）。
 - 端末がインターネット未接続でも、USB + `adb reverse` 経由なら Metro から読み込める（地図タイルは通信必須）。
 
+## デプロイ（Android 配布ビルド）
+
+このサンドボックス内では**ローカル APK ビルドは不可**です（CMake の `ninja` がサンドボックスのプロセス制約でハングする。詳細・証跡: [本番ビルド可否検証](docs/research/production-build.md)）。**EAS Build（クラウド）が配布用ビルドの経路**です。
+
+```powershell
+cd mobile
+npx eas-cli@latest login                                 # 初回のみ（Expo アカウント）
+npx eas-cli@latest init                                  # 初回のみ（EAS プロジェクト作成/リンク）
+npx eas-cli@latest build -p android --profile preview    # 配布用 APK（internal distribution）
+```
+
+- `mobile/eas.json` に `preview`（internal distribution / APK）と `production`（AAB / versionCode 自動採番）を定義済み
+- 手順の詳細・Google Maps API キーの注入・署名・トラブルシュート: [docs/deploy.md](docs/deploy.md)
+- サンドボックス外の通常 Windows PC ならローカルビルドも可能: `scripts/build-android.ps1`
+
 ## ステータス
 
 - [x] フェーズ1: 環境確認（PC 上での構築可否・Android 実行環境の readiness 判定）
 - [x] フェーズ1: 仕様策定（requirements / architecture / tasks）
 - [x] フェーズ1: プロジェクト雛形構築・PC 上でのビルド検証（`tsc --noEmit` / `jest --runInBand` / Metro バンドル）
-- [x] フェーズ1: Android 実機での起動確認（Pixel 4a / Expo Go 58.0.5 / `adb reverse` / 725 modules バンドル）
-- [ ] フェーズ2: 実装（1 タスクずつ実装・テスト）
+- [x] フェーズ1: Android 実機での起動確認（Pixel 4a / Expo Go 58.0.5 / `adb reverse`）
+- [x] M1: ドメイン層（T01〜T10・純粋関数・211 tests）
+- [x] M2: アダプタ層（T11〜T18・Mock センサー / AsyncStorage / expo-location）
+- [ ] M3: 状態管理・UI（T19〜T25）— 実装中
+- [ ] M4: 地図・仕上げ（T26〜T28）— T26 完了
+- [ ] 実機検証 D1〜D7（鳥の向き・権限・復元・オフライン・地図）
+- [ ] デプロイビルド（EAS Build）
