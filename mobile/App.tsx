@@ -11,12 +11,13 @@ import { startMockTicker } from './src/adapters/mock/mockTicker';
 import { AsyncStorageDestinationRepository } from './src/adapters/storage/AsyncStorageDestinationRepository';
 import { AsyncStorageSampleLogRepository } from './src/adapters/storage/AsyncStorageSampleLogRepository';
 import { DEFAULT_THRESHOLDS } from './src/domain/constants';
+import type { GeoPoint } from './src/domain/types';
 import { selectSelectedDestination } from './src/hooks/selectors';
 import { useNavApp, type NavAppDeps } from './src/hooks/useNavApp';
 import type { MockSensorController } from './src/ports/mockSensor';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { ScreenSwitcher } from './src/ui/components/ScreenSwitcher';
-import { type ScreenId } from './src/ui/labels';
+import { UI_TEXT, type ScreenId } from './src/ui/labels';
 import { DestinationAddScreen } from './src/ui/screens/DestinationAddScreen';
 import { DestinationListScreen } from './src/ui/screens/DestinationListScreen';
 import { DevLogScreen } from './src/ui/screens/DevLogScreen';
@@ -94,6 +95,9 @@ function createRuntime(): AppRuntime {
  */
 export default function App(): ReactElement {
   const [screen, setScreen] = useState<ScreenId>('main');
+  /** 地図で選んだ地点（S4）。場所名は U05（逆ジオコーディング）配線後に埋まる。 */
+  const [mapPickPoint, setMapPickPoint] = useState<GeoPoint | null>(null);
+  const [mapPickLabel, setMapPickLabel] = useState<string | null>(null);
   const runtime = useMemo(createRuntime, []);
   const { state, nav, actions } = useNavApp(runtime.deps);
   const selectedDestination = selectSelectedDestination(state);
@@ -130,7 +134,11 @@ export default function App(): ReactElement {
             }
           })();
         }}
-        onOpenMap={() => setScreen('map')}
+        onOpenMap={() => {
+          setMapPickPoint(null);
+          setMapPickLabel(null);
+          setScreen('map');
+        }}
         onBack={() => setScreen('main')}
       />
     );
@@ -182,10 +190,31 @@ export default function App(): ReactElement {
     content = (
       <ErrorBoundary onReturnToMain={() => setScreen('destinations')}>
         <MapScreen
-          currentPoint={state.location?.point ?? null}
-          destinationName={selectedDestination?.name ?? null}
-          destinationPoint={selectedDestination?.point ?? null}
-          nav={nav}
+          initialPoint={state.location?.point ?? null}
+          selectedPoint={mapPickPoint}
+          selectedLabel={mapPickLabel}
+          resolving={false}
+          onPick={(point) => {
+            setMapPickPoint(point);
+            setMapPickLabel(null);
+          }}
+          onConfirm={() => {
+            if (mapPickPoint === null) {
+              return;
+            }
+            void (async () => {
+              const saved = await actions.addDestination({
+                name: mapPickLabel ?? UI_TEXT.mapPick.defaultDestinationName,
+                point: mapPickPoint,
+                origin: 'manual',
+              });
+              if (saved) {
+                setMapPickPoint(null);
+                setMapPickLabel(null);
+                setScreen('main');
+              }
+            })();
+          }}
           onBack={() => setScreen('destinations')}
         />
       </ErrorBoundary>
@@ -196,17 +225,22 @@ export default function App(): ReactElement {
         <MainScreen
           nav={nav}
           destinationName={selectedDestination?.name ?? null}
-          destinationFavorite={null}
+          destinationFavorite={selectedDestination?.favorite ?? null}
           gpsAccuracyM={state.location?.accuracyM ?? null}
           permission={state.permission}
           onOpenDestinationPicker={() => setScreen('destinations')}
-          onToggleFavorite={() => undefined}
+          onToggleFavorite={() => {
+            if (selectedDestination !== null) {
+              void actions.setFavorite(
+                selectedDestination.id,
+                !selectedDestination.favorite,
+              );
+            }
+          }}
           onRequestPermission={() => {
             void actions.retryPermission();
           }}
-          onRetryLocation={() => {
-            void actions.retryPermission();
-          }}
+          onRetryLocation={() => actions.retryLocation()}
           onOpenDevMenu={() => setScreen('dev')}
         />
       </ErrorBoundary>

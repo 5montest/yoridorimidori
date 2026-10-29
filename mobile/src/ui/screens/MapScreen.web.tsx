@@ -1,73 +1,41 @@
 import type { ReactElement } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { formatBearingDeg, formatDistanceM } from '../../domain/format';
-import type { GeoPoint, NavState } from '../../domain/types';
+import type { GeoPoint } from '../../domain/types';
 import { UI_TEXT } from '../labels';
-import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../theme';
+import { COLORS, FONT_SIZE, RADIUS, SPACING, TAP_TARGET_MIN } from '../theme';
 
 export interface MapScreenProps {
-  readonly currentPoint: GeoPoint | null;
-  readonly destinationName: string | null;
-  readonly destinationPoint: GeoPoint | null;
-  readonly nav: NavState;
+  readonly initialPoint: GeoPoint | null;
+  readonly selectedPoint: GeoPoint | null;
+  readonly selectedLabel: string | null;
+  readonly resolving: boolean;
+  readonly onPick: (point: GeoPoint) => void;
+  readonly onConfirm: () => void;
   readonly onBack: () => void;
 }
 
 /**
- * 地図画面の Web フォールバック。§9.6 / §18-11 / T27。
+ * 地図で選ぶ画面の Web フォールバック（S4）。§18-11 / U07。
  *
  * - **地図ライブラリを import しない**（Web では地図が動かないため）。
- * - 「地図はこのプラットフォームでは表示できません」＋目的地名・距離・相対方位の数値を出す。
- * - Metro のプラットフォーム解決（`MapScreen.web.tsx`）に依存する。解決されない環境では
- *   `MapScreen.tsx` 内の `Platform.OS === 'web'` 分岐へ切り替える（tasks.md T27 注記）。
+ * - 「地図はこのプラットフォームでは表示できません」＋実機での利用案内を出す。
  */
-export function MapScreen({
-  currentPoint,
-  destinationName,
-  destinationPoint,
-  nav,
-  onBack,
-}: MapScreenProps): ReactElement {
-  const bearingText =
-    nav.status === 'arrived' ? UI_TEXT.noValue : formatBearingDeg(nav.relativeBearingDeg);
+export function MapScreen({ onBack }: MapScreenProps): ReactElement {
   return (
     <View style={styles.screen}>
-      <Text style={styles.title}>{UI_TEXT.mapScreen.title}</Text>
-      <Text style={styles.fallback}>{UI_TEXT.mapScreen.webFallback}</Text>
-
-      {currentPoint === null ? (
-        <Text style={styles.note}>{UI_TEXT.mapScreen.noLocation}</Text>
-      ) : null}
-      {destinationPoint === null ? (
-        <Text style={styles.note}>{UI_TEXT.mapScreen.noDestination}</Text>
-      ) : null}
-
-      <View style={styles.summary}>
-        <Text style={styles.summaryText}>
-          {`${UI_TEXT.mapScreen.destinationLabel}: ${
-            destinationName ?? UI_TEXT.main.destinationEmpty
-          }`}
-        </Text>
-        <Text style={styles.summaryText}>
-          {`${UI_TEXT.mapScreen.distanceLabel}: ${formatDistanceM(nav.distanceM)}`}
-        </Text>
-        <Text style={styles.summaryText}>
-          {`${UI_TEXT.mapScreen.relativeBearingLabel}: ${bearingText}`}
-        </Text>
-        {currentPoint === null ? null : (
-          <Text style={styles.summaryText}>
-            {`${UI_TEXT.mapScreen.locationLabel}: ${currentPoint.latitude.toFixed(5)}, ${currentPoint.longitude.toFixed(5)}`}
-          </Text>
-        )}
+      <View style={styles.header}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backIcon, pressed ? styles.pressed : null]}
+        >
+          <Text style={styles.backIconText}>←</Text>
+        </Pressable>
+        <Text style={styles.title}>{UI_TEXT.mapPick.title}</Text>
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={onBack}
-        style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
-      >
-        <Text style={styles.backButtonText}>{UI_TEXT.mapScreen.back}</Text>
-      </Pressable>
+      <Text style={styles.fallback}>{UI_TEXT.mapPick.webFallback}</Text>
+      <Text style={styles.body}>{UI_TEXT.mapPick.webFallbackBody}</Text>
+      <Text style={styles.hint}>{UI_TEXT.mapPick.instruction}</Text>
     </View>
   );
 }
@@ -79,6 +47,21 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     gap: SPACING.md,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  backIcon: {
+    minWidth: TAP_TARGET_MIN,
+    minHeight: TAP_TARGET_MIN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIconText: {
+    fontSize: FONT_SIZE.heading,
+    color: COLORS.primary,
+  },
   title: {
     fontSize: FONT_SIZE.title,
     fontWeight: '700',
@@ -86,37 +69,19 @@ const styles = StyleSheet.create({
   },
   fallback: {
     fontSize: FONT_SIZE.bodyLarge,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.text,
   },
-  note: {
+  body: {
+    fontSize: FONT_SIZE.body,
+    color: COLORS.text,
+  },
+  hint: {
     fontSize: FONT_SIZE.body,
     color: COLORS.textMuted,
-  },
-  summary: {
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    gap: SPACING.xs,
-  },
-  summaryText: {
-    fontSize: FONT_SIZE.body,
-    color: COLORS.text,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.primary,
-    borderRadius: RADIUS.pill,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-  },
-  backButtonText: {
-    color: COLORS.primary,
-    fontSize: FONT_SIZE.bodyLarge,
-    fontWeight: '600',
+    borderRadius: RADIUS.sm,
+    padding: SPACING.sm,
   },
   pressed: {
     opacity: 0.8,

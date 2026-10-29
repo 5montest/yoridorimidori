@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { HEADING_DISPATCH_MIN_INTERVAL_MS, type Thresholds } from '../domain/constants';
 import { elapsedMs } from '../domain/freshness';
 import { DEMO_PRESETS } from '../domain/presets';
@@ -54,6 +54,10 @@ export interface NavAppActions {
   useCurrentLocationAsDestination(name?: string): Promise<boolean>;
   toggleMockMode(): void;
   selectScenario(id: ScenarioId | null): void;
+  /** お気に入りの切り替え（☆）。永続化失敗は警告のみでアプリは継続する。 */
+  setFavorite(id: string, favorite: boolean): Promise<void>;
+  /** 現在地の再取得（購読を張り直す。権限が無ければ何もしない）。 */
+  retryLocation(): void;
   retryPermission(): Promise<void>;
   /** 文言表示のみ（設定アプリ遷移 API は使わない＝§18-8）。 */
   showSettingsHint(): void;
@@ -120,6 +124,8 @@ export function useNavApp(deps: NavAppDeps): NavApp {
   const lastHeadingDispatchMsRef = useRef<number | null>(null);
   /** 起動ロードを 1 回だけ実行する。 */
   const bootStartedRef = useRef(false);
+  /** 位置購読の張り直し用カウンタ（`retryLocation()` で増やす）。 */
+  const [subscriptionNonce, setSubscriptionNonce] = useState(0);
 
   const dispatchError = useCallback(
     (error: unknown) => {
@@ -426,6 +432,7 @@ export function useNavApp(deps: NavAppDeps): NavApp {
     state.booted,
     state.mockMode,
     state.permission?.status,
+    subscriptionNonce,
     locationProvider,
     headingProvider,
     mockLocationProvider,
@@ -493,6 +500,19 @@ export function useNavApp(deps: NavAppDeps): NavApp {
       selectDestination(id: string | null): void {
         dispatch({ type: 'destination/selected', id });
         persistSelection(id);
+        if (id !== null) {
+          const target = stateRef.current.destinations.find(
+            (destination) => destination.id === id,
+          );
+          if (target !== undefined) {
+            // 「最近使った場所」の並び替え用（失敗しても操作は継続）。
+            void destinationRepository.markUsed(id).catch(() => undefined);
+            dispatch({
+              type: 'destination/updated',
+              destination: { ...target, lastUsedAtEpochMs: clock.nowEpochMs() },
+            });
+          }
+        }
       },
 
       addDestination(input: DestinationInput): Promise<boolean> {
@@ -590,6 +610,43 @@ export function useNavApp(deps: NavAppDeps): NavApp {
             dispatchError(error);
           }
         }
+      },
+
+      async setFavorite(id: string, favorite: boolean): Promise<void> {
+        const target = stateRef.current.destinations.find(
+          (destination) => destination.id === id,
+        );
+        if (target === undefined) {
+          return;
+        }
+        try {
+          await destinationRepository.setFavorite(id, favorite);
+          if (mountedRef.current) {
+            dispatch({
+              type: 'destination/updated',
+              destination: { ...target, favorite },
+            });
+          }
+        } catch {
+          dispatchStorageWarning('お気に入りの保存に失敗しました');
+        }
+      },
+
+      retryLocation(): void {
+        // 購読 effect を張り直す（位置が止まったときのユーザー操作起点の再試行）。
+        setSubscriptionNonce((value) => value + 1);
+        const current = stateRef.current;
+        if (current.permission?.status !== 'granted') {
+          return;
+        }
+        void locationProvider
+          .getLastKnown()
+          .then((fix) => {
+            if (fix !== null && mountedRef.current) {
+              dispatch({ type: 'sensor/location', fix });
+            }
+          })
+          .catch(() => undefined);
       },
 
       showSettingsHint(): void {

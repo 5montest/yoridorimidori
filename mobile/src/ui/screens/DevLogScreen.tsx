@@ -37,6 +37,8 @@ export interface DevLogScreenProps {
   readonly onSelectScenario: (id: ScenarioId | null) => void;
   /** 座標で設定（開発用・S7）へ。一般画面には置かない（UX-1 / UX-6）。 */
   readonly onOpenCoordinateSetting: () => void;
+  /** オンボーディング（S1）を再表示する（App が表示状態を制御）。 */
+  readonly onResetOnboarding?: () => void;
   readonly onBack: () => void;
 }
 
@@ -60,6 +62,7 @@ export function DevLogScreen({
   onToggleMock,
   onSelectScenario,
   onOpenCoordinateSetting,
+  onResetOnboarding,
   onBack,
 }: DevLogScreenProps): ReactElement {
   const summary = useMemo(
@@ -104,6 +107,18 @@ export function DevLogScreen({
             <Text style={styles.backButtonText}>{UI_TEXT.devMenu.coordinateSetting}</Text>
           </Pressable>
         </View>
+
+        {onResetOnboarding === undefined ? null : (
+          <View style={styles.card}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onResetOnboarding}
+              style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.backButtonText}>{UI_TEXT.devMenu.onboardingReset}</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{UI_TEXT.devLog.summaryTitle}</Text>

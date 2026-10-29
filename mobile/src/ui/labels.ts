@@ -739,6 +739,8 @@ export const UI_TEXT = {
     selectedLabel: '選択中',
     resolving: '場所を調べています…',
     noSelection: '地図をタップすると場所が決まります',
+    /** 逆ジオコーディングが使えない場合の暫定の目的地名（U05 配線後も失敗時のフォールバック）。 */
+    defaultDestinationName: '地図で選んだ場所',
     confirm: 'この場所を目的地にする',
     webFallback: '地図はこのプラットフォームでは表示できません',
     webFallbackBody: 'Android / iOS の実機でご利用ください。',

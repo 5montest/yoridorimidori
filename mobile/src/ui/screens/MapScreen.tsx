@@ -1,157 +1,135 @@
 import type { ReactElement } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { formatBearingDeg, formatDistanceM } from '../../domain/format';
-import { regionForPoints, type MapRegion } from '../../domain/mapRegion';
-import type { GeoPoint, NavState } from '../../domain/types';
+import type { GeoPoint } from '../../domain/types';
 import { UI_TEXT } from '../labels';
-import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../theme';
+import { COLORS, FONT_SIZE, RADIUS, SPACING, TAP_TARGET_MIN } from '../theme';
+import { PrimaryButton } from '../components/PrimaryButton';
 
-/** 目的地未選択時に現在地だけを表示するときの拡大率（度）。 */
-const SINGLE_POINT_DELTA = 0.01;
-/** 2 点とも無い/不正なときの既定領域（東京駅周辺）。 */
-const DEFAULT_REGION: MapRegion = {
+/** 初期中心が無いときの既定領域（東京駅周辺）。 */
+const DEFAULT_REGION = {
   latitude: 35.681236,
   longitude: 139.767125,
   latitudeDelta: 0.02,
   longitudeDelta: 0.02,
 };
 
+/** 現在地だけ分かっているときの拡大率（度）。 */
+const SINGLE_POINT_DELTA = 0.01;
+
 export interface MapScreenProps {
-  /** 現在地（未取得なら `null`）。 */
-  readonly currentPoint: GeoPoint | null;
-  readonly destinationName: string | null;
-  readonly destinationPoint: GeoPoint | null;
-  /** 表示用の派生値（距離・相対方位は domain の結果を表示するだけ）。 */
-  readonly nav: NavState;
+  /** 地図の初期中心（現在地。無ければ既定領域）。 */
+  readonly initialPoint: GeoPoint | null;
+  /** 選択中の地点（未選択なら `null`）。 */
+  readonly selectedPoint: GeoPoint | null;
+  /** 選択地点の場所名（逆ジオコーディング結果。取得前は `null`）。 */
+  readonly selectedLabel: string | null;
+  /** 場所名を取得中か。 */
+  readonly resolving: boolean;
+  /** 地図タップで地点を選択（座標は内部表現。UI には出さない）。 */
+  readonly onPick: (point: GeoPoint) => void;
+  /** 「この場所を目的地にする」。 */
+  readonly onConfirm: () => void;
   readonly onBack: () => void;
 }
 
 /**
- * 地図画面（Android / iOS）。§9.6 / FR-11 / ADR-10 / T27。
+ * 地図で選ぶ画面（S4）。F2 / U07。
  *
- * - `react-native-maps` を import する**唯一のファイル**。
- * - 使用 props は確定済みのものだけ（notes §3.3 / §3.4）:
- *   `MapView` の `initialRegion` / `showsCompass` / `showsMyLocationButton` / `liteMode`、
- *   `Marker` の `coordinate` / `title` / `identifier`。
- * - **`showsUserLocation` は常に false**（権限が無いと無言で失敗するため）。現在地は自前 `Marker`。
- * - Google プロバイダの明示指定はしない（Expo Go では不要・カスタムビルド時のみ有効）。
- *   `provider` prop は渡さない（Android は既定で Google マップ）。
- * - 現在地が無いときは地図を描画せずフォールバック文言を出す。
- * - 地図が空白（API キー未設定）でも壊れないよう注記と戻る導線を常設する。
+ * - `MapView` の `onPress`（**確定済み API**: `event.nativeEvent.coordinate`）で地点を選ぶ。
+ * - **`react-native-maps` を import する唯一のファイル**。
+ * - 使用 props は確定済みのものだけ（notes §3.3 / §3.4）: `initialRegion` / `showsCompass` /
+ *   `showsMyLocationButton` / `liteMode`、`Marker` の `coordinate` / `title` / `identifier`。
+ * - `showsUserLocation` は使わない（権限なしで無言失敗するため。ADR-10）。
+ * - 座標は UI に出さない（UX-1）。確定操作は「この場所を目的地にする」。
  */
 export function MapScreen({
-  currentPoint,
-  destinationName,
-  destinationPoint,
-  nav,
+  initialPoint,
+  selectedPoint,
+  selectedLabel,
+  resolving,
+  onPick,
+  onConfirm,
   onBack,
 }: MapScreenProps): ReactElement {
-  if (currentPoint === null) {
-    return (
-      <View style={styles.screen}>
-        <Text style={styles.title}>{UI_TEXT.mapScreen.title}</Text>
-        <Text style={styles.fallback}>{UI_TEXT.mapScreen.noLocation}</Text>
-        <MapSummary nav={nav} destinationName={destinationName} />
-        <BackButton onPress={onBack} />
-      </View>
-    );
-  }
+  const region =
+    selectedPoint !== null
+      ? {
+          latitude: selectedPoint.latitude,
+          longitude: selectedPoint.longitude,
+          latitudeDelta: SINGLE_POINT_DELTA,
+          longitudeDelta: SINGLE_POINT_DELTA,
+        }
+      : initialPoint !== null
+        ? {
+            latitude: initialPoint.latitude,
+            longitude: initialPoint.longitude,
+            latitudeDelta: SINGLE_POINT_DELTA,
+            longitudeDelta: SINGLE_POINT_DELTA,
+          }
+        : DEFAULT_REGION;
+
+  const labelText = resolving
+    ? UI_TEXT.mapPick.resolving
+    : (selectedLabel ?? (selectedPoint === null ? UI_TEXT.mapPick.noSelection : ''));
 
   return (
     <View style={styles.screen}>
-      <MapView
-        style={styles.map}
-        initialRegion={computeInitialRegion(currentPoint, destinationPoint)}
-        showsCompass
-        showsMyLocationButton={false}
-        showsUserLocation={false}
-        liteMode={false}
-      >
-        <Marker
-          coordinate={currentPoint}
-          title={UI_TEXT.mapScreen.currentLocationMarker}
-          identifier="current-location"
-        />
-        {destinationPoint === null ? null : (
-          <Marker
-            coordinate={destinationPoint}
-            title={destinationName ?? UI_TEXT.mapScreen.destinationMarker}
-            identifier="destination"
-          />
-        )}
-      </MapView>
+      <View style={styles.header}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backIcon, pressed ? styles.pressed : null]}
+        >
+          <Text style={styles.backIconText}>←</Text>
+        </Pressable>
+        <Text style={styles.title}>{UI_TEXT.mapPick.title}</Text>
+      </View>
 
-      <View style={styles.noteBar} pointerEvents="none">
-        <Text style={styles.note}>{UI_TEXT.mapScreen.apiKeyNote}</Text>
+      <View style={styles.mapArea}>
+        <MapView
+          style={styles.map}
+          initialRegion={region}
+          showsCompass
+          showsMyLocationButton={false}
+          showsUserLocation={false}
+          liteMode={false}
+          onPress={(event) => {
+            const coordinate = event.nativeEvent.coordinate;
+            onPick({ latitude: coordinate.latitude, longitude: coordinate.longitude });
+          }}
+        >
+          {initialPoint === null ? null : (
+            <Marker
+              coordinate={initialPoint}
+              title={UI_TEXT.mapScreen.currentLocationMarker}
+              identifier="current-location"
+            />
+          )}
+          {selectedPoint === null ? null : (
+            <Marker
+              coordinate={selectedPoint}
+              title={selectedLabel ?? UI_TEXT.mapPick.selectedLabel}
+              identifier="selected-point"
+            />
+          )}
+        </MapView>
+        <View style={styles.instructionBar} pointerEvents="none">
+          <Text style={styles.instruction}>{UI_TEXT.mapPick.instruction}</Text>
+        </View>
       </View>
 
       <View style={styles.bottomBar}>
-        <MapSummary nav={nav} destinationName={destinationName} />
-        {destinationPoint === null ? (
-          <Text style={styles.note}>{UI_TEXT.mapScreen.noDestination}</Text>
-        ) : null}
-        <BackButton onPress={onBack} />
+        <Text style={styles.selectedLabel}>
+          {`${UI_TEXT.mapPick.selectedLabel}: ${labelText}`}
+        </Text>
+        <PrimaryButton
+          label={UI_TEXT.mapPick.confirm}
+          onPress={onConfirm}
+          disabled={selectedPoint === null || resolving}
+        />
       </View>
     </View>
-  );
-}
-
-/** 現在地・目的地を 1 画面に収める領域。片方だけなら現在地を中心にする。 */
-function computeInitialRegion(
-  currentPoint: GeoPoint,
-  destinationPoint: GeoPoint | null,
-): MapRegion {
-  if (destinationPoint === null) {
-    return {
-      latitude: currentPoint.latitude,
-      longitude: currentPoint.longitude,
-      latitudeDelta: SINGLE_POINT_DELTA,
-      longitudeDelta: SINGLE_POINT_DELTA,
-    };
-  }
-  return regionForPoints(currentPoint, destinationPoint) ?? DEFAULT_REGION;
-}
-
-interface MapSummaryProps {
-  readonly nav: NavState;
-  readonly destinationName: string | null;
-}
-
-/** 方位サマリ（地図が読めない場合でも数値で状況が分かるようにする）。 */
-function MapSummary({ nav, destinationName }: MapSummaryProps): ReactElement {
-  const bearingText =
-    nav.status === 'arrived' ? UI_TEXT.noValue : formatBearingDeg(nav.relativeBearingDeg);
-  return (
-    <View style={styles.summary}>
-      <Text style={styles.summaryText}>
-        {`${UI_TEXT.mapScreen.destinationLabel}: ${
-          destinationName ?? UI_TEXT.main.destinationEmpty
-        }`}
-      </Text>
-      <Text style={styles.summaryText}>
-        {`${UI_TEXT.mapScreen.distanceLabel}: ${formatDistanceM(nav.distanceM)}`}
-      </Text>
-      <Text style={styles.summaryText}>
-        {`${UI_TEXT.mapScreen.relativeBearingLabel}: ${bearingText}`}
-      </Text>
-    </View>
-  );
-}
-
-interface BackButtonProps {
-  readonly onPress: () => void;
-}
-
-function BackButton({ onPress }: BackButtonProps): ReactElement {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.backButton, pressed ? styles.pressed : null]}
-    >
-      <Text style={styles.backButtonText}>{UI_TEXT.mapScreen.back}</Text>
-    </Pressable>
   );
 }
 
@@ -160,66 +138,56 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
     padding: SPACING.md,
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
-  map: {
-    flex: 1,
-    borderRadius: RADIUS.md,
-    overflow: 'hidden',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  backIcon: {
+    minWidth: TAP_TARGET_MIN,
+    minHeight: TAP_TARGET_MIN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIconText: {
+    fontSize: FONT_SIZE.heading,
+    color: COLORS.primary,
   },
   title: {
     fontSize: FONT_SIZE.title,
     fontWeight: '700',
     color: COLORS.text,
   },
-  fallback: {
-    fontSize: FONT_SIZE.bodyLarge,
-    color: COLORS.text,
+  mapArea: {
+    flex: 1,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
   },
-  noteBar: {
+  map: {
+    flex: 1,
+  },
+  instructionBar: {
     position: 'absolute',
-    left: SPACING.md,
-    right: SPACING.md,
-    top: SPACING.md,
+    top: SPACING.sm,
+    left: SPACING.sm,
+    right: SPACING.sm,
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.sm,
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
   },
-  note: {
-    fontSize: FONT_SIZE.caption,
-    color: COLORS.textMuted,
-  },
-  bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.border,
-    padding: SPACING.md,
-    gap: SPACING.sm,
-  },
-  summary: {
-    gap: 2,
-  },
-  summaryText: {
+  instruction: {
     fontSize: FONT_SIZE.body,
     color: COLORS.text,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.primary,
-    borderRadius: RADIUS.pill,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
+  bottomBar: {
+    gap: SPACING.sm,
   },
-  backButtonText: {
-    color: COLORS.primary,
+  selectedLabel: {
     fontSize: FONT_SIZE.bodyLarge,
-    fontWeight: '600',
+    color: COLORS.text,
   },
   pressed: {
     opacity: 0.8,
