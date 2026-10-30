@@ -187,6 +187,9 @@ export default function App(): ReactElement {
   // ステータスバー（時刻・バッテリー）との重なりを避ける。safe-area-context は追加しない。
   const statusBarPaddingTop = statusBarTopInset(NativeStatusBar.currentHeight);
 
+  // 案内中か（明示的な「案内を開始／終了」で切り替える。2026-10-30）。
+  const [guidanceActive, setGuidanceActive] = useState(true);
+
   // 目的地選択（S3〜S5）のオーケストレーション（検索/クリップボード/ディープリンク/地図）。
   const recent = useMemo(() => recentDestinations(state.destinations), [state.destinations]);
   const favorites = useMemo(() => filterFavorites(state.destinations), [state.destinations]);
@@ -196,6 +199,7 @@ export default function App(): ReactElement {
       void (async () => {
         const saved = await actions.addDestination(input, { select: true });
         if (saved) {
+          setGuidanceActive(true);
           setScreen('main');
         }
       })();
@@ -342,6 +346,7 @@ export default function App(): ReactElement {
           void (async () => {
             const saved = await actions.useCurrentLocationAsDestination('');
             if (saved) {
+              setGuidanceActive(true);
               setScreen('main');
             }
           })();
@@ -360,10 +365,12 @@ export default function App(): ReactElement {
         }))}
         onSelectRecent={(id) => {
           actions.selectDestination(id);
+          setGuidanceActive(true);
           setScreen('main');
         }}
         onSelectFavorite={(id) => {
           actions.selectDestination(id);
+          setGuidanceActive(true);
           setScreen('main');
         }}
         shareLinkState={shareLinkState}
@@ -401,6 +408,7 @@ export default function App(): ReactElement {
           void (async () => {
             const saved = await actions.useCurrentLocationAsDestination('');
             if (saved) {
+              setGuidanceActive(true);
               setScreen('main');
             }
           })();
@@ -481,7 +489,10 @@ export default function App(): ReactElement {
           destinationName={selectedDestination?.name ?? null}
           destinationFavorite={selectedDestination?.favorite ?? null}
           permission={state.permission}
+          guidanceActive={guidanceActive}
           onOpenDestinationPicker={() => setScreen('destinations')}
+          onStartGuidance={() => setGuidanceActive(true)}
+          onEndGuidance={() => setGuidanceActive(false)}
           onToggleFavorite={() => {
             if (selectedDestination !== null) {
               void actions.setFavorite(

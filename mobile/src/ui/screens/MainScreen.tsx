@@ -36,8 +36,14 @@ export interface MainScreenProps {
   readonly destinationFavorite: boolean | null;
   /** 位置情報の権限状態（拒否時の案内に使う）。 */
   readonly permission: PermissionOutcome | null;
+  /** 案内中か（false のときは休んでいるオオハシ＋「案内を開始」）。 */
+  readonly guidanceActive: boolean;
   /** 目的地チップ・主要ボタンから S3（目的地を選ぶ）へ。 */
   readonly onOpenDestinationPicker: () => void;
+  /** 「案内を開始」（停止中から再開）。 */
+  readonly onStartGuidance: () => void;
+  /** 「案内を終了」（オオハシを休ませる）。 */
+  readonly onEndGuidance: () => void;
   readonly onToggleFavorite: () => void;
   readonly onRequestPermission: () => void;
   readonly onRetryLocation: () => void;
@@ -62,7 +68,10 @@ export function MainScreen({
   destinationName,
   destinationFavorite,
   permission,
+  guidanceActive,
   onOpenDestinationPicker,
+  onStartGuidance,
+  onEndGuidance,
   onToggleFavorite,
   onRequestPermission,
   onRetryLocation,
@@ -72,6 +81,7 @@ export function MainScreen({
 
   const arrived = nav.status === 'arrived';
   const hasDestination = destinationName !== null;
+  const showGuidance = hasDestination && guidanceActive;
   const hasLocation = nav.locationAgeMs !== null;
   const locating = nav.status === 'locating' || (hasDestination && !hasLocation);
   const positionLost = nav.status === 'position-lost';
@@ -86,6 +96,9 @@ export function MainScreen({
   const directionCaption = (): string => {
     if (!hasDestination) {
       return UI_TEXT.main.noDestinationBody;
+    }
+    if (!guidanceActive) {
+      return UI_TEXT.main.guidanceStoppedBody;
     }
     if (positionLost) {
       return UI_TEXT.main.positionLostBody;
@@ -153,7 +166,7 @@ export function MainScreen({
 
         <View style={styles.birdArea}>
           <View style={styles.birdStage}>
-            {hasDestination ? (
+            {showGuidance ? (
               <View style={styles.ringLayer} pointerEvents="none">
                 <CompassRing size={RING_SIZE} />
               </View>
@@ -161,22 +174,44 @@ export function MainScreen({
             <Bird
               relativeBearingDeg={nav.relativeBearingDeg}
               arrived={arrived}
-              size={hasDestination ? BIRD_SIZE : SLEEPING_BIRD_SIZE}
-              pose={hasDestination ? 'standing' : 'sleeping'}
+              size={showGuidance ? BIRD_SIZE : SLEEPING_BIRD_SIZE}
+              pose={showGuidance ? 'standing' : 'sleeping'}
             />
           </View>
         </View>
 
         <View style={styles.readout}>
-          {arrived ? (
-            <>
-              <Text style={styles.arrivedTitle}>{UI_TEXT.main.arrivedTitle}</Text>
-              <Text style={styles.arrivedDistance}>{formatDistanceM(nav.distanceM)}</Text>
-            </>
-          ) : showDistance ? (
-            <Text style={styles.distance}>{formatDistanceM(nav.distanceM)}</Text>
+          {showGuidance ? (
+            arrived ? (
+              <>
+                <Text style={styles.arrivedTitle}>{UI_TEXT.main.arrivedTitle}</Text>
+                <Text style={styles.arrivedDistance}>{formatDistanceM(nav.distanceM)}</Text>
+              </>
+            ) : showDistance ? (
+              <Text style={styles.distance}>{formatDistanceM(nav.distanceM)}</Text>
+            ) : null
           ) : null}
           <Text style={styles.caption}>{directionCaption()}</Text>
+
+          {showGuidance ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={UI_TEXT.main.endGuidance}
+              onPress={onEndGuidance}
+              style={({ pressed }) => [styles.endGuidanceButton, pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.endGuidanceText}>{UI_TEXT.main.endGuidance}</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.guidanceActions}>
+              <PrimaryButton
+                label={
+                  hasDestination ? UI_TEXT.main.startGuidance : UI_TEXT.main.selectDestination
+                }
+                onPress={hasDestination ? onStartGuidance : onOpenDestinationPicker}
+              />
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -352,5 +387,23 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.8,
+  },
+  endGuidanceButton: {
+    alignSelf: 'center',
+    minHeight: TAP_TARGET_MIN,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.surfaceAlt,
+    marginTop: SPACING.xs,
+  },
+  endGuidanceText: {
+    fontSize: FONT_SIZE.body,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  guidanceActions: {
+    alignSelf: 'stretch',
+    marginTop: SPACING.sm,
   },
 });
