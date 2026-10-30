@@ -134,7 +134,6 @@ export function DestinationPickerScreen({
             </Text>
           </Pressable>
         </View>
-        <Text style={styles.hint}>{UI_TEXT.destinationPicker.searchRequiresNetwork}</Text>
 
         {/* 2. クイックカード */}
         <View style={styles.quickRow}>
@@ -152,9 +151,9 @@ export function DestinationPickerScreen({
           />
         </View>
         {locationReason === null ? null : <Text style={styles.hint}>{locationReason}</Text>}
-        {shareLinkMessage.length === 0 ? null : (
+        {shareLinkState === 'ready' ? (
           <Text style={styles.message}>{shareLinkMessage}</Text>
-        )}
+        ) : null}
         {shareLinkState === 'ready' &&
         onConfirmShared !== undefined &&
         onDismissShared !== undefined ? (
@@ -179,26 +178,7 @@ export function DestinationPickerScreen({
           onPress={onOpenMapPick}
         />
 
-        {/* 4. 最近使った場所 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            {UI_TEXT.destinationPicker.recentTitle}
-          </Text>
-          {recent.length === 0 ? (
-            <Text style={styles.hint}>{UI_TEXT.destinationPicker.noRecent}</Text>
-          ) : (
-            recent.map((place) => (
-              <PlaceRow
-                key={place.id}
-                name={place.name}
-                icon={<ClockIcon size={18} color={COLORS.textMuted} />}
-                onPress={() => onSelectRecent(place.id)}
-              />
-            ))
-          )}
-        </View>
-
-        {/* 5. お気に入り */}
+        {/* 4. お気に入り */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             {UI_TEXT.destinationPicker.favoritesTitle}
@@ -212,6 +192,25 @@ export function DestinationPickerScreen({
                 name={place.name}
                 icon={<StarIcon size={18} color="#C98A12" />}
                 onPress={() => onSelectFavorite(place.id)}
+              />
+            ))
+          )}
+        </View>
+
+        {/* 5. 最近使った場所 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {UI_TEXT.destinationPicker.recentTitle}
+          </Text>
+          {recent.length === 0 ? (
+            <Text style={styles.hint}>{UI_TEXT.destinationPicker.noRecent}</Text>
+          ) : (
+            recent.map((place) => (
+              <PlaceRow
+                key={place.id}
+                name={place.name}
+                icon={<ClockIcon size={18} color={COLORS.textMuted} />}
+                onPress={() => onSelectRecent(place.id)}
               />
             ))
           )}

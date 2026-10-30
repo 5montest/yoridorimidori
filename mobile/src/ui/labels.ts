@@ -716,7 +716,6 @@ export const UI_TEXT = {
     back: '戻る',
     searchPlaceholder: '場所や住所を検索',
     searchButton: '検索',
-    searchRequiresNetwork: '場所の検索にはインターネット接続と位置情報の許可が必要です',
     useCurrentLocation: '現在地を目的地にする',
     currentLocationUnavailable: '現在地が取得できていません',
     currentLocationLost: '位置情報が途絶えているため現在地を使えません',
@@ -729,9 +728,6 @@ export const UI_TEXT = {
     favoritesTitle: 'お気に入り',
     noRecent: 'まだありません。目的地を選ぶとここに表示されます。',
     noFavorites: '☆ を付けた場所がここに表示されます。',
-    otherMethodsTitle: 'その他の方法',
-    clipboardButton: 'コピーしたリンクから設定',
-    clipboardHint: 'Google マップの「リンクをコピー」などで共有できます',
     shareConfirm: 'この場所を目的地にする',
     shareDismiss: '閉じる',
     /** 場所名が取得できないときの既定の目的地名（地図・逆ジオコーディング用）。 */
