@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatDistanceM } from '../../domain/format';
 import type { NavState } from '../../domain/types';
@@ -19,6 +19,7 @@ import { Bird } from '../components/Bird';
 import { CompassRing } from '../components/CompassRing';
 import { DestinationChip } from '../components/DestinationChip';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { StateOverlay } from '../components/StateOverlay';
 
 /** 案内中のオオハシのサイズ（pt）。 */
 const BIRD_SIZE = 290;
@@ -78,6 +79,8 @@ export function MainScreen({
   onOpenDevMenu,
 }: MainScreenProps): ReactElement {
   const [permissionDismissed, setPermissionDismissed] = useState(false);
+  /** 「現在地が分からなくなりました」オーバーレイを閉じたか（位置復帰でリセット）。 */
+  const [positionLostDismissed, setPositionLostDismissed] = useState(false);
 
   const arrived = nav.status === 'arrived';
   const hasDestination = destinationName !== null;
@@ -90,8 +93,16 @@ export function MainScreen({
     permission !== null &&
     (permission.status === 'denied' || permission.status === 'undetermined');
   const showPermissionCard = permissionBlocked && !permissionDismissed;
-  const showLocationState = hasDestination && (locating || positionLost);
+  const showLocationState = hasDestination && locating;
   const showDistance = hasDestination && hasLocation && !arrived && !positionLost;
+  const showPositionLostOverlay = showGuidance && positionLost && !positionLostDismissed;
+
+  // 位置が復帰したら「閉じた」状態をリセットする（次に途絶したらまた表示する）。
+  useEffect(() => {
+    if (!positionLost) {
+      setPositionLostDismissed(false);
+    }
+  }, [positionLost]);
 
   const directionCaption = (): string => {
     if (!hasDestination) {
@@ -153,12 +164,8 @@ export function MainScreen({
 
         {showLocationState ? (
           <StateCard
-            title={
-              positionLost ? UI_TEXT.main.positionLostTitle : UI_TEXT.main.locatingTitle
-            }
-            body={
-              positionLost ? UI_TEXT.main.positionLostBody : UI_TEXT.main.locatingBody
-            }
+            title={UI_TEXT.main.locatingTitle}
+            body={UI_TEXT.main.locatingBody}
             primaryLabel={UI_TEXT.main.retry}
             onPrimary={onRetryLocation}
           />
@@ -214,6 +221,18 @@ export function MainScreen({
           )}
         </View>
       </ScrollView>
+
+      {/* 現在地が分からないときは、レイアウトを押し下げずオーバーレイで知らせる。 */}
+      {showPositionLostOverlay ? (
+        <StateOverlay
+          title={UI_TEXT.main.positionLostTitle}
+          body={UI_TEXT.main.positionLostBody}
+          primaryLabel={UI_TEXT.main.retry}
+          onPrimary={onRetryLocation}
+          dismissLabel={UI_TEXT.main.dismiss}
+          onDismiss={() => setPositionLostDismissed(true)}
+        />
+      ) : null}
     </View>
   );
 }

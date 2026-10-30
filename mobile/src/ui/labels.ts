@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Freshness,
   GpsAccuracyClass,
   HeadingAccuracyClass,
@@ -536,6 +536,7 @@ export const UI_TEXT = {
     startGuidance: '案内を開始',
     endGuidance: '案内を終了',
     guidanceStoppedBody: '案内は停止中です。「案内を開始」で再開できます。',
+    dismiss: '閉じる',
     selectDestination: '目的地を選ぶ',
     noDestinationBody: '目的地を選ぶと、オオハシが方向を教えます。',
     sleepingBirdLabel: 'オオハシが休んでいます',
