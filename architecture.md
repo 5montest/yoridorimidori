@@ -1523,18 +1523,21 @@ export const DEMO_SCENARIO_ID: ScenarioId;   // 既定: 'static'
 **構造（`ui/components/Bird.tsx`）**
 
 ```tsx
-// 設計スケッチ（実装は tasks.md のタスクで行う）
-// パスデータは designer 提供の ui/components/toucanPaths.ts（viewBox 0 0 100 100、クチバシ上向き）
+// 実装（2026-10-30 現在）: 透過 PNG 画像を Image で描画し、外側の Animated.View で回転する
 <Animated.View style={{ transform: [{ rotate: rotateInterpolation }] }}>
-  <Svg width={w} height={h} viewBox="0 0 100 100">
-    {TOUCAN_PATHS.map((p) => <Path key={p.id} d={p.d} fill={p.fill} />)}
-  </Svg>
+  <Animated.View style={{ transform: [{ scale: breathing }] }}>
+    <Image source={toucanImage} style={{ width: size, height: size }} resizeMode="contain" />
+  </Animated.View>
 </Animated.View>
 ```
 
-- **`react-native-svg` 15.16.0 の API は確認済み**（[svg-and-animation.md](docs/research/svg-and-animation.md)）: `Svg` の `width`/`height`/`viewBox`、`Path` の `d`/`fill`/`stroke`/`strokeWidth` 等を使用可。**SVG の props に `Animated.Value` を渡してはならない**（値を文字列化する実装のため解釈されない）。回転は必ず外側の `Animated.View`。
-
-- **回転は `Animated.View` の `transform: rotate` で行う**（RN コア）。SVG 要素の `transform` 属性による回転は**採用しない**（`react-native-svg` の API が ⚠️ 未確認のため。§18-1）。SVG は**図形描画のみ**に使う。仮に `react-native-svg` の `transform` props が実装時に確認できても、毎フレームの再レンダリングが必要になり `Animated.Value` + `Animated.View` より重いため、回転は外側の `Animated.View` に任せる。
+- 画像は **`mobile/assets/toucan.png`（案内中）と `mobile/assets/toucan-sleeping.png`（未選択時）**。
+  1024×1024 / RGBA 透過 / クチバシ上向き 0° / 鳥の高さ 88.5% / 中央配置（§21・§22）。
+- **回転は `Animated.View` の `transform: rotate`**（RN コア）で行う。画像の回転中心は画像中心なので、
+  クチバシの先端が常に「目的地の方向」を指す。
+- **呼吸するような待機アニメ**（`scale` を ±1.5〜2% 往復）を内側の `Animated.View` に付ける。
+- 以前は `react-native-svg` のパス（`toucanPaths.ts`）で描画していたが、Windows の APK ビルドで
+  new-arch codegen の 260 文字パス制限に抵触したため PNG 画像に変更した（§21）。`toucanPaths.ts` は削除済み。
 - **角度の持ち方**: `Animated.Value` に「累積回転（度）」を持たせる。`nextContinuousAngleDeg()`（§6.9）で目標値を決め、`Animated.timing(value, { toValue, duration: 250, easing, useNativeDriver: true })` で遷移。
 - **補間**: `value.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] })`。RN の `interpolate` は範囲外を**線形外挿**するため `361deg` も連続的に表現できる想定だが、⚠️ **外挿挙動は実装時に目視確認する**（§18-2）。確認できない場合は `reduceContinuousAngle()` で `±720°` 以内に収め、`inputRange: [-720, 720]` の 1 本の補間でカバーする。
 - **回転方向**: `relativeBearingDeg` の `+` を**時計回り**として扱う（`+90` = 右）。RN の `rotate` は正が時計回り（CSS 準拠）だが、**実機/PC で目視確認する**（§18-3）。
@@ -2312,3 +2315,17 @@ readonly lastUsedAtEpochMs: number | null; // 最近使った順の基準。未�
   - `favicon.png`（192）、`splash-icon.png`（透明・鳥60%）
 - アダプティブアイコン設定（`app.json`）は変更なし。prebuild で mipmap が再生成される。
 - アイコン変更時は `npx expo prebuild --platform android --clean` → ビルド（JSのみの変更と違いネイティブ再生成が必要）。
+
+---
+
+## 23. リポジトリ整理（2026-10-30）
+
+- 削除（未使用になったもの）:
+  - `mobile/src/ui/components/toucanPaths.ts` — オオハシを PNG 画像に変更したため未使用（§9.3 / §21）。
+  - `mobile/src/domain/mapRegion.ts` と `mobile/src/domain/__tests__/mapRegion.test.ts` — Google Maps（`react-native-maps`）削除に伴い未使用（§20）。
+  - `docs/assets/toucan-preview.png` / `toucan-preview-48.png` / `toucan-transparent-preview.png` / `toucan-source-2026-10-30.png` — 旧デザインの素材・中間生成物。
+  - `.npmrc`（サンドボックス用の npm キャッシュ固定）— 現行環境では不要。
+- `.gitignore` に作業用ディレクトリ（`_review/` 等）・`*.apk` を追加。
+- `mobile/package.json` の Jest `transformIgnorePatterns` から不要になった `react-native-svg` を削除。
+- CI（`.github/workflows/ci.yml`）: push / PR で `npm ci` → `npm run verify` を実行。
+- 単体テスト: 645 → **628**（削除した `mapRegion` の 17 件分）。

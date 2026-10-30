@@ -45,3 +45,12 @@ mobile/coverage/
 # APK ビルド検証用コピー
 .apk-build/
 
+# 作業用ディレクトリ・成果物（このリポジトリには含めない）
+_review-tools/
+_review/
+ai-no-chizu/
+shot-test.png
+*.apk
+
+# npm キャッシュ（ローカル）
+.cache/npm/
