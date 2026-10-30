@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Freshness,
   GpsAccuracyClass,
   HeadingAccuracyClass,
@@ -721,6 +721,10 @@ export const UI_TEXT = {
     currentLocationUnavailable: '現在地が取得できていません',
     currentLocationLost: '位置情報が途絶えているため現在地を使えません',
     openMap: '地図から選ぶ',
+    quickCurrentLocation: '現在地',
+    quickClipboard: 'リンクから',
+    mapCardTitle: '地図から選ぶ',
+    mapCardHint: '地図上で地点を選びます',
     recentTitle: '最近使った場所',
     favoritesTitle: 'お気に入り',
     noRecent: 'まだありません。目的地を選ぶとここに表示されます。',

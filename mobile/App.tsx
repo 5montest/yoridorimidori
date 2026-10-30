@@ -337,6 +337,7 @@ export default function App(): ReactElement {
           state.location !== null && nav.locationFreshness !== 'lost'
         }
         currentLocationLost={nav.locationFreshness === 'lost'}
+        currentPoint={state.location?.point ?? null}
         onUseCurrentLocation={() => {
           void (async () => {
             const saved = await actions.useCurrentLocationAsDestination('');
