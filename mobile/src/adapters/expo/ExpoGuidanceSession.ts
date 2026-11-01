@@ -177,14 +177,15 @@ export class ExpoGuidanceSession implements GuidanceSessionPort {
     this.lastBody = null;
     this.lastUpdateAtMs = 0;
 
-    const handle = this.handle;
+    // 前回のプロセスで登録されたタスクが残っている場合に備え、
+    // ハンドルが無いときも同名タスクの登録解除を試みる（起動時のクリーンアップ）。
+    const handle =
+      this.handle ?? new LocationNext.LocationUpdatesHandle(GUIDANCE_TASK_NAME);
     this.handle = null;
-    if (handle !== null) {
-      try {
-        await handle.stop();
-      } catch {
-        // 登録解除の失敗は無視。
-      }
+    try {
+      await handle.stop();
+    } catch {
+      // 登録解除の失敗は無視（タスク未登録など）。
     }
     try {
       await LocationNext.Location.stopBackgroundSession();
