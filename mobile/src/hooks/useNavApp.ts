@@ -165,10 +165,19 @@ export function useNavApp(deps: NavAppDeps): NavApp {
         dispatch({ type: 'samples/loaded', samples });
 
         if (destinations.length > 0) {
+          // アプリを終了すると案内は終了し「目的地未設定」に戻す（2026-11-01）。
+          // 目的地リスト・履歴は保持し、選択状態だけを起動時に解除する。
+          if (selection !== null) {
+            try {
+              await destinationRepository.writeSelection(null);
+            } catch {
+              dispatchStorageWarning('目的地の選択状態を解除できませんでした');
+            }
+          }
           dispatch({
             type: 'boot/completed',
             destinations,
-            selectedDestinationId: selection,
+            selectedDestinationId: null,
             nowMonotonicMs: clock.nowMonotonicMs(),
           });
           return;

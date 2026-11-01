@@ -532,3 +532,45 @@
 - クラッシュ / ANR: 0 件。単体テスト・型検査: 35 suites / 645 tests PASS・`tsc` 0。
 
 証跡: `device-v13-position-lost-overlay-2026-10-30.png` / `device-v13-position-recovered-2026-10-30.png`
+
+---
+
+## V14 検証: バックグラウンド案内・通知・スリープ防止（2026-11-01）
+
+### 背景（ユーザー要望）
+「Google マップのように案内中はバックグラウンドで処理してほしい。通知バーでも基本的な情報を確認でき、
+アプリを終了すると案内が自動的に終わり目的地未設定に戻る。案内中はスリープに入らないように。」
+
+### 実装
+- **バックグラウンド処理**: `expo-location/next` の foreground service（`ensureBackgroundSessionStarted`）＋
+  バックグラウンド位置タスク（`defineLocationTask` / `LocationUpdatesHandle`、`OTHER_NAVIGATION` プロファイル）。
+- **通知**: タイトル「寄鳥美鳥地」・本文「目的地「東京駅」まで 1.20 km」。
+  位置更新（バックグラウンドタスク）と前景の距離変化に合わせて更新（5 秒スロットル）。
+- **アプリ終了で案内終了**: `stopOnTaskRemoved: true`（履歴から削除でサービス停止）＋
+  起動時に保存済みの目的地選択を解除して「目的地未設定」で開始（リスト・履歴は保持）。
+- **スリープ防止**: `expo-keep-awake`（`activateKeepAwakeAsync` / `deactivateKeepAwake`）。
+- **権限**: `ACCESS_BACKGROUND_LOCATION` / `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_LOCATION` /
+  `POST_NOTIFICATIONS` / `RECEIVE_BOOT_COMPLETED`。案内開始時に通知・バックグラウンド権限を要求（拒否時は前景のみ）。
+
+### ビルド・APK 検証（実施済み）
+| # | 確認項目 | 結果 |
+|---|---|---|
+| 1 | `npm run verify`（tsc + jest） | ✅ 35 suites / **634 tests PASS**・`tsc` 0 |
+| 2 | 通知文言の純粋関数テスト | ✅ `guidanceNotification.test.ts` 6 件 |
+| 3 | APK ビルド（`assembleDebug`） | ✅ 成功・**50.4MB**（`arm64-v8a`・JS バンドル同梱） |
+| 4 | APK マニフェスト（`aapt2 dump xmltree`） | ✅ 上記 5 権限・`LocationTaskService` / `LocationForegroundService`（foregroundServiceType=location）・通知アイコン |
+| 5 | JS バンドルへの組み込み | ✅ `yoridorimidori-guidance` / `ensureBackgroundSessionStarted` / `ExpoGuidanceSession` / 通知文言 |
+
+### 実機検証（**未実施**）
+端末（Pixel 4a）が接続されていないため（`adb devices` が空）、ランタイムの確認は未実施。
+端末接続後に以下を確認する:
+1. 案内開始 → 通知バーに「寄鳥美鳥地 / 目的地「X」まで …」が出る
+2. ホームに戻しても通知が残り、距離が更新される（バックグラウンド）
+3. `adb shell dumpsys power | Select-String "KEEP_SCREEN_ON|Wake Locks"` でスリープ防止を確認
+4. 履歴からアプリを終了 → 通知が消える → 再起動すると「目的地を選ぶ」状態（未設定）
+5. 通知権限・バックグラウンド位置権限のダイアログと拒否時のフォールバック
+
+### 既知の制約
+- 通知本文は距離のみ（バックグラウンドではコンパス方位が取れないため方向の言葉は出さない）。
+- バックグラウンド位置権限を拒否した場合は前景のみの案内（通知は出ない）。
+- Expo Go では `expo-location/next` のバックグラウンド機能が使えないため、APK / development build で確認する。

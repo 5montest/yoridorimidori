@@ -1,8 +1,9 @@
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { StatusBar as NativeStatusBar, StyleSheet, View } from 'react-native';
 import { SystemClock } from './src/adapters/clock/SystemClock';
 import { ExpoClipboardProvider } from './src/adapters/expo/ExpoClipboardProvider';
+import { ExpoGuidanceSession } from './src/adapters/expo/ExpoGuidanceSession';
 import { ExpoHeadingProvider } from './src/adapters/expo/ExpoHeadingProvider';
 import { ExpoLinkingProvider } from './src/adapters/expo/ExpoLinkingProvider';
 import { ExpoLocationProvider } from './src/adapters/expo/ExpoLocationProvider';
@@ -189,6 +190,48 @@ export default function App(): ReactElement {
 
   // 案内中か（明示的な「案内を開始／終了」で切り替える。2026-10-30）。
   const [guidanceActive, setGuidanceActive] = useState(true);
+
+  // バックグラウンド案内（通知・スリープ防止・バックグラウンド位置更新）。2026-11-01。
+  const guidanceSession = useMemo(() => new ExpoGuidanceSession(), []);
+  const guidanceDestinationId = selectedDestination?.id ?? null;
+  const guidanceDestinationName = selectedDestination?.name ?? null;
+  /** start 時点の距離（依存配列から距離を外すための ref）。 */
+  const distanceRef = useRef<number | null>(nav.distanceM);
+  distanceRef.current = nav.distanceM;
+
+  // アプリ終了（プロセス終了）時の案内終了に備え、起動時に前回のバックグラウンド案内を止める。
+  useEffect(() => {
+    void guidanceSession.stop();
+    return () => {
+      void guidanceSession.stop();
+    };
+  }, [guidanceSession]);
+
+  // 案内の開始・終了（目的地の選択・解除や「案内を終了」に連動）。
+  useEffect(() => {
+    if (!guidanceActive || guidanceDestinationId === null) {
+      void guidanceSession.stop();
+      return undefined;
+    }
+    void guidanceSession.start({
+      destinationName: guidanceDestinationName,
+      distanceM: distanceRef.current,
+    });
+    return () => {
+      void guidanceSession.stop();
+    };
+  }, [guidanceActive, guidanceDestinationId, guidanceDestinationName, guidanceSession]);
+
+  // 距離の変化に合わせて通知を更新（実装側で 5 秒スロットル）。
+  useEffect(() => {
+    if (!guidanceActive || guidanceDestinationId === null) {
+      return;
+    }
+    guidanceSession.update({
+      destinationName: guidanceDestinationName,
+      distanceM: nav.distanceM,
+    });
+  }, [guidanceActive, guidanceDestinationId, guidanceDestinationName, nav.distanceM, guidanceSession]);
 
   // 目的地選択（S3〜S5）のオーケストレーション（検索/クリップボード/ディープリンク/地図）。
   const recent = useMemo(() => recentDestinations(state.destinations), [state.destinations]);

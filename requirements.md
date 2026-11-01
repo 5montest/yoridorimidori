@@ -393,6 +393,7 @@
 | D-23 | **共有先アプリに出ない**（2026-10-30 ユーザー指摘） | `ACTION_SEND` の受信未実装（Expo Go では不可） | **決定/結果**: `expo-share-intent@9.0.0` + config plugin（`text/*`）で実装。**共有シートに「寄鳥美鳥地」が表示され、共有テキストから目的地を設定**できることを実機確認。短縮リンクは HTTP リダイレクトで解決（ユーザー操作起点の例外通信）。Expo Go では無効（APK / dev build のみ） |
 | D-24 | **Google マップ実共有で短縮リンクが読めない**（2026-10-30 ユーザー指摘） | RN の `fetch` は最終 URL を返さないため `response.url` での解決が失敗 | **決定/結果**: 短縮リンクは **HTTP 取得して展開先 URL・HTML 本文から座標を抽出**する方式に変更。場所名は「共有タイトル（EXTRA_TITLE）→ 共有本文 → HTML の og:title」の順で採用し汎用名（Google Maps 等）は除外。**実 Google マップ（Pixel 4a）からの共有 → 短縮リンク解決 → 「ららぽーとTOKYO-BAY」13.14km 設定**まで実機確認 |
 | D-25 | **Google Maps の従量課金を避けたい**（2026-10-30 ユーザー指摘） | Google Maps SDK は API キー＋課金・無料枠あり | **決定/結果**: **`react-native-maps`（Google Maps）を削除し、OpenStreetMap ラスタータイル地図に置き換え**（`domain/tileMath.ts` の純粋関数 + `ui/components/OsmMapView.tsx`）。API キー不要・課金なし。帰属表示（© OpenStreetMap contributors）を常時表示。OSM タイル利用ポリシー（大量アクセス禁止）に留意し、本番規模では自前タイルサーバ/商用プロバイダを検討（[destination-ux-apis.md](docs/research/destination-ux-apis.md)） |
+| D-26 | **バックグラウンド案内・通知・スリープ防止**（2026-11-01 ユーザー要望） | Google マップのように案内中はバックグラウンドで動き、通知バーで基本情報を確認したい。アプリ終了で案内終了・目的地未設定に戻す。スリープしない | **決定/実装**: expo-location/next の foreground service（ensureBackgroundSessionStarted）＋バックグラウンド位置タスク（defineLocationTask / LocationUpdatesHandle）で実装。通知タイトル「寄鳥美鳥地」・本文「目的地「X」まで 1.20 km」を位置更新に合わせて更新（5秒スロットル）。stopOnTaskRemoved: true で履歴から消すとサービス停止。起動時に選択状態を解除して「目的地未設定」に戻す。案内中は expo-keep-awake で画面スリープを防止 |
 
 ---
 

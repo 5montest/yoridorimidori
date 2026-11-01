@@ -2329,3 +2329,28 @@ readonly lastUsedAtEpochMs: number | null; // 最近使った順の基準。未�
 - `mobile/package.json` の Jest `transformIgnorePatterns` から不要になった `react-native-svg` を削除。
 - CI（`.github/workflows/ci.yml`）: push / PR で `npm ci` → `npm run verify` を実行。
 - 単体テスト: 645 → **628**（削除した `mapRegion` の 17 件分）。
+
+---
+
+## 24. バックグラウンド案内（2026-11-01）
+
+Google マップのように、案内中はアプリをバックグラウンドにしても位置更新・通知・スリープ防止を続ける。
+
+### 構成
+- **ポート**: `ports/guidanceSession.ts` の `GuidanceSessionPort`（`start` / `update` / `stop`。throw しない）。
+- **アダプタ**: `adapters/expo/ExpoGuidanceSession.ts`
+  - `expo-location/next` の **foreground service**（`Location.ensureBackgroundSessionStarted`）を開始し、
+    通知（タイトル「寄鳥美鳥地」・本文「目的地「X」まで 1.20 km」・ブランド緑）を表示する。
+  - サービスが既に動いているときの同 API 呼び出しは**通知の再表示（本文更新）**になる（5 秒スロットル）。
+  - **バックグラウンド位置**: `defineLocationTask` でタスクを定義し、`LocationUpdatesHandle` を
+    `LocationProfile.OTHER_NAVIGATION` で開始。タスクは保存済みの目的地から距離を計算して通知を更新する。
+  - `stopOnTaskRemoved: true`: 履歴からアプリを消す（終了する）と foreground service が停止する。
+  - **スリープ防止**: `expo-keep-awake` の `activateKeepAwakeAsync` / `deactivateKeepAwake`。
+- **App 配線**: 案内中（`guidanceActive && 目的地選択あり`）に `start`、距離変化で `update`、
+  案内終了・目的地解除・アンマウントで `stop`。
+- **アプリ終了時の扱い**: `useNavApp` の起動時に**保存済みの選択状態を解除**して「目的地未設定」で開始する
+  （目的地リスト・履歴は保持）。前回の foreground service も起動時に停止する。
+- **権限**: `expo-location` config plugin で `ACCESS_BACKGROUND_LOCATION` / `RECEIVE_BOOT_COMPLETED` /
+  `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_LOCATION` / `POST_NOTIFICATIONS` を追加。
+  案内開始時に通知権限とバックグラウンド位置権限を要求する（拒否時は前景のみで継続）。
+- **通知文言**: `domain/guidanceNotification.ts` の純粋関数 `buildGuidanceNotificationBody`（単体テストあり）。
