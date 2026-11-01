@@ -123,6 +123,27 @@ export function MainScreen({
     if (headingUnknown) {
       return UI_TEXT.main.headingUnknownBody;
     }
+    // 2026-11-01: 方位安定化。不確かなときは通常の方向表示をしない。
+    if (nav.guidanceAvailability === 'unavailable') {
+      switch (nav.guidanceIssue) {
+        case 'position':
+          return UI_TEXT.main.guidanceUnavailablePosition;
+        case 'heading':
+          return UI_TEXT.main.guidanceUnavailableHeading;
+        case 'both':
+          return UI_TEXT.main.guidanceUnavailableBoth;
+        default:
+          break;
+      }
+    }
+    if (nav.guidanceAvailability === 'hold') {
+      if (nav.relativeBearingDeg === null) {
+        return UI_TEXT.main.guidanceHold;
+      }
+      return `${UI_TEXT.main.directionPrefix} ${directionWordLabel(
+        nav.relativeBearingDeg,
+      )}（${UI_TEXT.main.holdSuffix}）`;
+    }
     return `${UI_TEXT.main.directionPrefix} ${directionWordLabel(nav.relativeBearingDeg)}`;
   };
 
@@ -183,6 +204,7 @@ export function MainScreen({
               arrived={arrived}
               size={showGuidance ? BIRD_SIZE : SLEEPING_BIRD_SIZE}
               pose={showGuidance ? 'standing' : 'sleeping'}
+              availability={nav.guidanceAvailability}
             />
           </View>
         </View>

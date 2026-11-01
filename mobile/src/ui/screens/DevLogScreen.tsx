@@ -5,6 +5,8 @@ import { formatAgeMs, formatBearingDeg } from '../../domain/format';
 import type { ScenarioId } from '../../domain/scenario';
 import { summarizeSamples } from '../../domain/summarize';
 import type { SampleLogEntry } from '../../domain/types';
+import type { SignalQuality, SignalQualityState } from '../../domain/signalQuality';
+import type { SignalQualityLogEntry } from '../../hooks/navState';
 import type { ProviderError } from '../../ports/common';
 import type { MockSensorController } from '../../ports/mockSensor';
 import { MockControlPanel } from '../components/MockControlPanel';
@@ -12,6 +14,7 @@ import {
   UI_TEXT,
   formatEpochClockTime,
   headingAccuracyLevelLabel,
+  signalQualityLineLabel,
   sampleSummaryAverageGpsLabel,
   sampleSummaryHeadingDistributionLabel,
   sampleSummaryStaleRatioLabel,
@@ -26,6 +29,10 @@ export interface DevLogScreenProps {
   readonly samples: readonly SampleLogEntry[];
   readonly storageWarnings: readonly string[];
   readonly errors: readonly ProviderError[];
+  /** 信号品質（方位・位置）の最新状態（2026-11-01）。 */
+  readonly signalQuality: SignalQualityState;
+  /** 信号品質の判断履歴（古い順）。 */
+  readonly signalLog: readonly SignalQualityLogEntry[];
   /** 集計の閾値（`summarizeSamples` に渡す。UI では再計算しない）。 */
   readonly thresholds: Thresholds;
   readonly controller: MockSensorController;
@@ -56,6 +63,8 @@ export function DevLogScreen({
   samples,
   storageWarnings,
   errors,
+  signalQuality,
+  signalLog,
   thresholds,
   controller,
   mockMode,
@@ -167,6 +176,31 @@ export function DevLogScreen({
             label={UI_TEXT.devLog.sampleCount}
             value={`${summary.totalCount}`}
           />
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{UI_TEXT.devLog.signalTitle}</Text>
+          <SummaryRow
+            label={`${UI_TEXT.devLog.signalLatest}（方位）`}
+            value={signalQualityLineLabel(signalQuality.heading)}
+          />
+          <SummaryRow
+            label={`${UI_TEXT.devLog.signalLatest}（位置）`}
+            value={signalQualityLineLabel(signalQuality.location)}
+          />
+          <Text style={styles.note}>{UI_TEXT.devLog.signalLogTitle}</Text>
+          {signalLog.length === 0 ? (
+            <Text style={styles.note}>{UI_TEXT.devLog.signalNone}</Text>
+          ) : (
+            signalLog
+              .slice(-5)
+              .reverse()
+              .map((entry, index) => (
+                <Text key={`signal-${entry.atMonotonicMs}-${index}`} style={styles.note}>
+                  {`${entry.atMonotonicMs} ms  方位: ${signalQualityLineLabel(entry.heading)}  位置: ${signalQualityLineLabel(entry.location)}`}
+                </Text>
+              ))
+          )}
         </View>
 
         <View style={styles.card}>

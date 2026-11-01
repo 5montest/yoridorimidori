@@ -34,6 +34,23 @@ export interface Thresholds {
   };
   readonly arrivalRadiusM: number; // 既定 10
   readonly sampleLogCapacity: number; // 既定 300
+  /** 案内の安全側制御（2026-11-01）。仮説値。実測で調整する。 */
+  readonly guidance: {
+    /** 到着確定に必要な水平精度の上限（m）。 */
+    readonly arrivalMaxAccuracyM: number;
+    /** 到着確定に許す測位時刻と受信時刻の差（ms）。 */
+    readonly arrivalMaxCaptureLagMs: number;
+    /** 位置が stale のとき案内を一時保持するか。 */
+    readonly holdWhenLocationStale: boolean;
+    /** 方位が stale のとき案内を一時保持するか。 */
+    readonly holdWhenHeadingStale: boolean;
+    /** 方位精度が低い（0/1/null）とき案内を一時保持するか。 */
+    readonly holdWhenHeadingAccuracyLow: boolean;
+    /** GPS 精度が poor/unknown のとき案内を一時保持するか。 */
+    readonly holdWhenGpsPoor: boolean;
+    /** 目的地が近いとき（distance < accuracy * ratio）案内を一時保持する。 */
+    readonly nearDestinationAccuracyRatio: number;
+  };
 }
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
@@ -41,6 +58,15 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   gpsAccuracy: { goodMaxM: 10, fairMaxM: 30 },
   arrivalRadiusM: ARRIVAL_RADIUS_M,
   sampleLogCapacity: SAMPLE_LOG_CAPACITY,
+  guidance: {
+    arrivalMaxAccuracyM: 10,
+    arrivalMaxCaptureLagMs: 5_000,
+    holdWhenLocationStale: true,
+    holdWhenHeadingStale: true,
+    holdWhenHeadingAccuracyLow: true,
+    holdWhenGpsPoor: true,
+    nearDestinationAccuracyRatio: 3,
+  },
 };
 
 /** 位置取得プロファイル（アダプタが Location.Accuracy にマップする）。 */

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactElement } from 'react';
 import { Animated, Easing, Image, StyleSheet, useAnimatedValue } from 'react-native';
 import { nextContinuousAngleDeg, reduceContinuousAngle } from '../../domain/rotation';
+import type { GuidanceAvailability } from '../../domain/types';
 import { UI_TEXT, birdAccessibilityLabel } from '../labels';
 import toucanImage from '../../../assets/toucan.png';
 import sleepingToucanImage from '../../../assets/toucan-sleeping.png';
@@ -28,6 +29,12 @@ export interface BirdProps {
   readonly size?: number;
   /** 姿勢。未指定は `standing`（案内中）。 */
   readonly pose?: BirdPose;
+  /**
+   * 案内の信頼度（2026-11-01 追加）。
+   * - `hold` / `unavailable` のときは**前回の向きを保持**し、回転を更新しない
+   *   （不確かな方位で誤誘導しないため。`relativeBearingDeg` が null でも 0° に戻さない）。
+   */
+  readonly availability?: GuidanceAvailability;
 }
 
 /**
@@ -47,6 +54,7 @@ export function Bird({
   arrived,
   size = 220,
   pose = 'standing',
+  availability = 'normal',
 }: BirdProps): ReactElement {
   const angle = useAnimatedValue(0);
   const breathing = useAnimatedValue(1);
@@ -69,6 +77,10 @@ export function Bird({
   });
 
   useEffect(() => {
+    if (availability !== 'normal') {
+      // 一時保持・案内保留では前回の向きを維持する（不確かな方位で回転しない）。
+      return undefined;
+    }
     const assetDeg =
       isSleeping || relativeBearingDeg === null || arrived ? 0 : relativeBearingDeg;
     const rawNextDeg = nextContinuousAngleDeg(continuousDegRef.current, assetDeg);
@@ -105,7 +117,7 @@ export function Bird({
     return () => {
       animation.stop();
     };
-  }, [angle, arrived, isSleeping, relativeBearingDeg]);
+  }, [angle, arrived, isSleeping, relativeBearingDeg, availability]);
 
   // 待機中の呼吸アニメ（姿勢で周期・振幅を変える）。
   useEffect(() => {
@@ -137,9 +149,23 @@ export function Bird({
       accessible
       accessibilityRole="image"
       accessibilityLabel={
-        isSleeping ? UI_TEXT.main.sleepingBirdLabel : birdAccessibilityLabel(relativeBearingDeg, arrived)
+        isSleeping
+          ? UI_TEXT.main.sleepingBirdLabel
+          : availability === 'unavailable'
+            ? UI_TEXT.main.birdUncertainUnavailable
+            : availability === 'hold'
+              ? UI_TEXT.main.birdUncertainHold
+              : birdAccessibilityLabel(relativeBearingDeg, arrived)
       }
-      style={[styles.container, { width: size, height: size, transform: [{ rotate }] }]}
+      style={[
+        styles.container,
+        {
+          width: size,
+          height: size,
+          transform: [{ rotate }],
+          opacity: availability === 'unavailable' ? 0.45 : availability === 'hold' ? 0.7 : 1,
+        },
+      ]}
     >
       <Animated.View style={{ transform: [{ scale: breathing }] }}>
         <Image

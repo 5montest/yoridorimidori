@@ -10,6 +10,7 @@ import type { PermissionOutcome, ProviderError } from '../../ports/common';
 import { createInitialNavAppState, type NavAppState } from '../navState';
 import {
   MAX_ERRORS,
+  MAX_SIGNAL_LOG,
   MAX_STORAGE_WARNINGS,
   navReducer,
   type NavAction,
@@ -25,6 +26,15 @@ const THRESHOLDS: Thresholds = {
   gpsAccuracy: { goodMaxM: 5, fairMaxM: 20 },
   arrivalRadiusM: 10,
   sampleLogCapacity: 3,
+  guidance: {
+    arrivalMaxAccuracyM: 10,
+    arrivalMaxCaptureLagMs: 5_000,
+    holdWhenLocationStale: true,
+    holdWhenHeadingStale: true,
+    holdWhenHeadingAccuracyLow: true,
+    holdWhenGpsPoor: true,
+    nearDestinationAccuracyRatio: 3,
+  },
 };
 
 const GRANTED: PermissionOutcome = { status: 'granted', canAskAgain: true };
@@ -583,5 +593,47 @@ describe('セレクタ', () => {
       { type: 'provider/error', error: makeError('invalid-data', 'second') },
     ]);
     expect(selectLatestError(state)?.message).toBe('second');
+  });
+});
+
+// ── 2026-11-01: 信号品質（方位安定化） ──────────────────────────────────────
+
+describe('navReducer — signal/quality', () => {
+  function qualityState(mode: 'normal' | 'transient' | 'unavailable'): {
+    heading: { mode: typeof mode; decision: 'accepted'; reason: null };
+    location: { mode: typeof mode; decision: 'accepted'; reason: null };
+  } {
+    return {
+      heading: { mode, decision: 'accepted', reason: null },
+      location: { mode, decision: 'accepted', reason: null },
+    };
+  }
+
+  it('signal/quality で最新値と履歴（最大 MAX_SIGNAL_LOG 件）を保持する', () => {
+    let state = createInitialNavAppState(true, THRESHOLDS);
+    for (let index = 0; index < MAX_SIGNAL_LOG + 5; index += 1) {
+      state = navReducer(state, {
+        type: 'signal/quality',
+        quality: qualityState(index % 2 === 0 ? 'normal' : 'transient'),
+        atMonotonicMs: index,
+      });
+    }
+    expect(state.signalQuality.heading.mode).toBe('normal');
+    expect(state.signalLog).toHaveLength(MAX_SIGNAL_LOG);
+    expect(state.signalLog[state.signalLog.length - 1]?.atMonotonicMs).toBe(
+      MAX_SIGNAL_LOG + 4,
+    );
+  });
+
+  it('mock/toggled で信号品質と履歴を初期化する', () => {
+    let state = createInitialNavAppState(true, THRESHOLDS);
+    state = navReducer(state, {
+      type: 'signal/quality',
+      quality: qualityState('unavailable'),
+      atMonotonicMs: 1,
+    });
+    state = navReducer(state, { type: 'mock/toggled', enabled: true });
+    expect(state.signalQuality.heading.mode).toBe('normal');
+    expect(state.signalLog).toEqual([]);
   });
 });

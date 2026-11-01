@@ -30,10 +30,10 @@ function forEachFrame(
 }
 
 describe('SCENARIOS — データ不変条件', () => {
-  it('6 件定義され、id が一意', () => {
-    expect(SCENARIOS).toHaveLength(6);
+  it('12 件定義され、id が一意', () => {
+    expect(SCENARIOS).toHaveLength(12);
     const ids = SCENARIOS.map((scenario) => scenario.id);
-    expect(new Set(ids).size).toBe(6);
+    expect(new Set(ids).size).toBe(12);
     expect(ids).toEqual([
       'static',
       'straight',
@@ -41,6 +41,12 @@ describe('SCENARIOS — データ不変条件', () => {
       'gps-dropout',
       'heading-unknown',
       'stale-data',
+      'heading-jitter',
+      'heading-jump',
+      'north-crossing',
+      'gps-jump',
+      'train-speed',
+      'heading-accuracy-degrade',
     ]);
   });
 

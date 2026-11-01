@@ -2354,3 +2354,37 @@ Google マップのように、案内中はアプリをバックグラウンド�
   `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_LOCATION` / `POST_NOTIFICATIONS` を追加。
   案内開始時に通知権限とバックグラウンド位置権限を要求する（拒否時は前景のみで継続）。
 - **通知文言**: `domain/guidanceNotification.ts` の純粋関数 `buildGuidanceNotificationBody`（単体テストあり）。
+
+---
+
+## 25. 方位安定化・異常測位対策（2026-11-01）
+
+誤誘導を避けるため、**「測定値の妥当性」「信頼性」「表示の平滑化」「案内継続の可否」を分けて扱う**。
+
+### パイプライン
+```text
+Expo Location / Heading（生値）
+  → 位置フィルタ / 方位フィルタ（domain。純粋関数）
+  → 信号品質（normal / transient / unavailable + 理由コード）
+  → computeNavState（鮮度・精度・品質から availability を判定）
+  → UI（通常案内 / 一時保持（確認中） / 案内保留）
+```
+
+### 主要ファイル
+| ファイル | 役割 |
+|---|---|
+| `domain/signalQuality.ts` | `SignalMode` / `SampleDecision` / `SignalReason`（UI 文言ではなく開発ログ用コード） |
+| `domain/headingFilter.ts` | 円周対応の指数移動平均、大ジャンプの一時保持＋実回転検出、低精度保持、unavailable 復帰ヒステリシス、真北⇔磁北の再初期化 |
+| `domain/locationFilter.ts` | 低精度の保持、位置飛びの一時保持＋実移動検出（速度による一律判定なし）、微小移動の平滑化 |
+| `domain/nav.ts` | 到着品質ゲート、位置ロストの先行判定、`guidanceAvailability` / `guidanceIssue` |
+| `hooks/useNavApp.ts` | 受信時のフィルタ適用、採用値のみ dispatch、`signal/quality` の記録、Mock/シナリオ切替時の初期化 |
+| `ui/components/Bird.tsx` | hold/unavailable では前回の向きを保持（0° に戻さない）・不透明度で明示 |
+| `ui/screens/DevLogScreen.tsx` | 信号品質（最新・直近 5 件）の表示（開発メニューのみ） |
+
+### 判断の要点
+- **到着**は品質の良い測位のみ（精度 good/fair・測位時刻と受信時刻の差 ≤ 5 秒・鮮度 lost/stale でない）。
+- **方位 lost** は `heading-unknown`（古い方位で案内しない）。
+- **hold** は「前回の向きを表示し『確認中』」、**unavailable** は要因別のメッセージを出し方向を出さない。
+- **磁北フォールバック**は警告＋フィルタ再初期化で扱い、常時 hold にはしない（Android で trueHeading が取れない場合があるため。実測で調整）。
+- **閾値は仮説値**（`constants.ts` の `guidance`、`headingFilter` / `locationFilter` の既定値）。実測ログで調整する。
+- **フェーズ3（ジャイロ統合）は未実装**。設計メモは `docs/research/heading-stabilization.md`。

@@ -1,4 +1,8 @@
 import type { ScenarioId } from '../domain/scenario';
+import {
+  INITIAL_SIGNAL_QUALITY_STATE,
+  type SignalQualityState,
+} from '../domain/signalQuality';
 import { ringPush, ringTrim } from '../domain/ringBuffer';
 import type {
   Destination,
@@ -13,6 +17,8 @@ import type { NavAppState } from './navState';
 export const MAX_ERRORS = 10;
 /** 保持する保存警告の最大件数（UI は控えめに表示するため上限を設ける）。 */
 export const MAX_STORAGE_WARNINGS = 20;
+/** 保持する信号品質ログの最大件数。 */
+export const MAX_SIGNAL_LOG = 20;
 
 /** リデューサが受け付けるアクション。§7.2。 */
 export type NavAction =
@@ -25,6 +31,11 @@ export type NavAction =
   | { readonly type: 'permission/changed'; readonly permission: PermissionOutcome }
   | { readonly type: 'sensor/location'; readonly fix: SensorFix }
   | { readonly type: 'sensor/heading'; readonly fix: HeadingFix }
+  | {
+      readonly type: 'signal/quality';
+      readonly quality: SignalQualityState;
+      readonly atMonotonicMs: number;
+    }
   | { readonly type: 'sensor/reset' }
   | { readonly type: 'heading/unavailable' }
   | { readonly type: 'provider/error'; readonly error: ProviderError }
@@ -74,8 +85,28 @@ export function navReducer(state: NavAppState, action: NavAction): NavAppState {
     case 'sensor/heading':
       return { ...state, heading: action.fix };
 
+    case 'signal/quality':
+      return {
+        ...state,
+        signalQuality: action.quality,
+        signalLog: [
+          ...state.signalLog,
+          {
+            atMonotonicMs: action.atMonotonicMs,
+            heading: action.quality.heading,
+            location: action.quality.location,
+          },
+        ].slice(-MAX_SIGNAL_LOG),
+      };
+
     case 'sensor/reset':
-      return { ...state, location: null, heading: null };
+      return {
+        ...state,
+        location: null,
+        heading: null,
+        signalQuality: INITIAL_SIGNAL_QUALITY_STATE,
+        signalLog: [],
+      };
 
     case 'heading/unavailable':
       return { ...state, headingUnavailable: true };
@@ -153,12 +184,19 @@ export function navReducer(state: NavAppState, action: NavAction): NavAppState {
         // プロバイダ切替時は古いセンサー値を破棄する（§7.2 / §11.5）。
         location: null,
         heading: null,
+        signalQuality: INITIAL_SIGNAL_QUALITY_STATE,
+        signalLog: [],
         headingUnavailable: false,
         scenarioId: action.enabled ? state.scenarioId : null,
       };
 
     case 'mock/scenario':
-      return { ...state, scenarioId: action.scenarioId };
+      return {
+        ...state,
+        scenarioId: action.scenarioId,
+        signalQuality: INITIAL_SIGNAL_QUALITY_STATE,
+        signalLog: [],
+      };
 
     case 'storage/warning':
       return {

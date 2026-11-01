@@ -492,6 +492,8 @@ export default function App(): ReactElement {
         samples={state.samples}
         storageWarnings={state.storageWarnings}
         errors={state.errors}
+        signalQuality={state.signalQuality}
+        signalLog={state.signalLog}
         thresholds={state.thresholds}
         controller={runtime.controller}
         mockMode={state.mockMode}

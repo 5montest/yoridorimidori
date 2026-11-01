@@ -1,4 +1,16 @@
 import type { Thresholds } from '../domain/constants';
+import {
+  INITIAL_SIGNAL_QUALITY_STATE,
+  type SignalQuality,
+  type SignalQualityState,
+} from '../domain/signalQuality';
+
+/** 信号品質の判断履歴（開発メニュー表示用。最新が末尾）。 */
+export interface SignalQualityLogEntry {
+  readonly atMonotonicMs: number;
+  readonly heading: SignalQuality;
+  readonly location: SignalQuality;
+}
 import type { ScenarioId } from '../domain/scenario';
 import type {
   Destination,
@@ -23,6 +35,10 @@ export interface NavAppState {
   readonly headingUnavailable: boolean;
   readonly location: SensorFix | null;
   readonly heading: HeadingFix | null;
+  /** 信号フィルタの状態（2026-11-01）。 */
+  readonly signalQuality: SignalQualityState;
+  /** 信号品質の判断履歴（最大 MAX_SIGNAL_LOG 件）。 */
+  readonly signalLog: readonly SignalQualityLogEntry[];
   readonly destinations: readonly Destination[];
   readonly selectedDestinationId: string | null;
   /** Mock モード ON/OFF（開発ビルドのみ切替可）。 */
@@ -56,6 +72,8 @@ export function createInitialNavAppState(
     headingUnavailable: false,
     location: null,
     heading: null,
+    signalQuality: INITIAL_SIGNAL_QUALITY_STATE,
+    signalLog: [],
     destinations: [],
     selectedDestinationId: null,
     mockMode: false,

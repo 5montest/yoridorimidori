@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Freshness,
   GpsAccuracyClass,
   HeadingAccuracyClass,
@@ -7,6 +7,7 @@
   WarningCode,
 } from '../domain/types';
 import { formatAgeMs } from '../domain/format';
+import type { SignalQuality } from '../domain/signalQuality';
 import { normalizeSignedDegrees } from '../domain/normalize';
 import type { ValidationResult } from '../domain/validation';
 
@@ -484,6 +485,11 @@ export function headingAccuracyLevelLabel(level: 0 | 1 | 2 | 3 | null): string {
   return level === null ? NO_VALUE : `${level}`;
 }
 
+/** 信号品質の 1 行表示（mode / decision / reason）。開発メニュー用。 */
+export function signalQualityLineLabel(quality: SignalQuality): string {
+  return `${quality.mode} / ${quality.decision} / ${quality.reason ?? NO_VALUE}`;
+}
+
 function pad2(value: number): string {
   return value < 10 ? `0${value}` : `${value}`;
 }
@@ -541,6 +547,14 @@ export const UI_TEXT = {
     noDestinationBody: '目的地を選ぶと、オオハシが方向を教えます。',
     sleepingBirdLabel: 'オオハシが休んでいます',
     headingUnknownBody: 'コンパスを準備しています。端末を軽く動かしてみてください。',
+    /** 案内の信頼度（2026-11-01: 方位安定化）。 */
+    guidanceUnavailablePosition: '現在地を確認しています…',
+    guidanceUnavailableHeading: '方位を確認しています…',
+    guidanceUnavailableBoth: '現在地と方位を確認しています…',
+    guidanceHold: '前回の向きを表示しています（確認中）',
+    holdSuffix: '確認中',
+    birdUncertainHold: '向きを確認中',
+    birdUncertainUnavailable: '向きが不明',
     devMenuHint: 'タイトルを長押し',
   },
   /** 方位リング（S2）*/
@@ -594,6 +608,10 @@ export const UI_TEXT = {
   devLog: {
     title: '開発用（記録・Mock）',
     summaryTitle: '簡易集計',
+    signalTitle: '信号品質（方位・位置）',
+    signalLatest: '最新',
+    signalLogTitle: '判断履歴（直近5件）',
+    signalNone: '—',
     averageGps: '平均 GPS 精度',
     sampleCount: '平均の対象件数',
     headingAccuracyDistribution: '方位精度の分布（0/1/2/3）',

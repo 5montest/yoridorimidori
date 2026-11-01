@@ -23,16 +23,19 @@ interface LocationOptions {
   readonly point?: GeoPoint;
   readonly accuracyM?: number | null;
   readonly ageMs?: number;
+  /** 測位時刻と受信時刻の差（ms）。到着判定の品質ゲート用。 */
+  readonly captureLagMs?: number;
 }
 
 function makeLocation(options: LocationOptions = {}): SensorFix {
   const point = options.point ?? ORIGIN;
   const accuracyM = options.accuracyM === undefined ? 5 : options.accuracyM;
   const ageMs = options.ageMs ?? 0;
+  const captureLagMs = options.captureLagMs ?? 0;
   return {
     point,
     accuracyM,
-    capturedAtEpochMs: EPOCH,
+    capturedAtEpochMs: EPOCH - captureLagMs,
     receivedAtMonotonicMs: NOW - ageMs,
     receivedAtEpochMs: EPOCH,
     source: 'mock',
@@ -410,5 +413,152 @@ function defaultThresholds(): Thresholds {
     gpsAccuracy: { goodMaxM: 10, fairMaxM: 30 },
     arrivalRadiusM: 10,
     sampleLogCapacity: 300,
+    guidance: {
+      arrivalMaxAccuracyM: 10,
+      arrivalMaxCaptureLagMs: 5_000,
+      holdWhenLocationStale: true,
+      holdWhenHeadingStale: true,
+      holdWhenHeadingAccuracyLow: true,
+      holdWhenGpsPoor: true,
+      nearDestinationAccuracyRatio: 3,
+    },
   };
 }
+
+// ── 2026-11-01: 方位安定化・異常測位対策（フェーズ1） ────────────────────────
+
+describe('computeNavState — 到着判定の品質ゲート（2026-11-01）', () => {
+  it('目的地=現在地でも測位が古い（capture lag 10 秒）なら到着にしない', () => {
+    const state = computeNavState(
+      makeInput({
+        destination: makeDestination(ORIGIN),
+        location: makeLocation({ point: ORIGIN, accuracyM: 5, captureLagMs: 10_000 }),
+      }),
+    );
+    expect(state.status).not.toBe('arrived');
+    expect(state.distanceM).toBeCloseTo(0, 6);
+  });
+
+  it('目的地=現在地でも GPS 精度が poor（50m）なら到着にしない', () => {
+    const state = computeNavState(
+      makeInput({
+        destination: makeDestination(ORIGIN),
+        location: makeLocation({ point: ORIGIN, accuracyM: 50 }),
+      }),
+    );
+    expect(state.status).not.toBe('arrived');
+    expect(state.guidanceAvailability).toBe('hold');
+  });
+
+  it('目的地=現在地でも GPS 精度が不明（null）なら到着にしない', () => {
+    const state = computeNavState(
+      makeInput({
+        destination: makeDestination(ORIGIN),
+        location: makeLocation({ point: ORIGIN, accuracyM: null }),
+      }),
+    );
+    expect(state.status).not.toBe('arrived');
+  });
+
+  it('目的地=現在地でも位置が stale なら到着にしない', () => {
+    const state = computeNavState(
+      makeInput({
+        destination: makeDestination(ORIGIN),
+        location: makeLocation({ point: ORIGIN, accuracyM: 5, ageMs: 20_000 }),
+      }),
+    );
+    expect(state.status).not.toBe('arrived');
+  });
+
+  it('目的地=現在地でも位置が lost なら position-lost（到着より先に判定）', () => {
+    const state = computeNavState(
+      makeInput({
+        destination: makeDestination(ORIGIN),
+        location: makeLocation({ point: ORIGIN, accuracyM: 5, ageMs: 30_001 }),
+      }),
+    );
+    expect(state.status).toBe('position-lost');
+    expect(state.guidanceAvailability).toBe('unavailable');
+    expect(state.guidanceIssue).toBe('position');
+  });
+});
+
+describe('computeNavState — 案内の信頼度（availability）', () => {
+  it('正常時は normal', () => {
+    const state = computeNavState(makeInput());
+    expect(state.guidanceAvailability).toBe('normal');
+    expect(state.guidanceIssue).toBeNull();
+  });
+
+  it('方位が lost なら heading-unknown・unavailable（古い方位で案内しない）', () => {
+    const state = computeNavState(makeInput({ heading: makeHeading({ ageMs: 35_000 }) }));
+    expect(state.status).toBe('heading-unknown');
+    expect(state.relativeBearingDeg).toBeNull();
+    expect(state.guidanceAvailability).toBe('unavailable');
+    expect(state.guidanceIssue).toBe('heading');
+  });
+
+  it('方位が stale なら navigating のまま hold（確認中）', () => {
+    const state = computeNavState(makeInput({ heading: makeHeading({ ageMs: 12_000 }) }));
+    expect(state.status).toBe('navigating');
+    expect(state.guidanceAvailability).toBe('hold');
+    expect(state.guidanceIssue).toBe('heading');
+  });
+
+  it('GPS 精度 poor なら hold（位置起因）', () => {
+    const state = computeNavState(makeInput({ location: makeLocation({ accuracyM: 50 }) }));
+    expect(state.guidanceAvailability).toBe('hold');
+    expect(state.guidanceIssue).toBe('position');
+  });
+
+  it('目的地が近く精度誤差の影響が大きいときは hold', () => {
+    const destination = eastPointAt(20);
+    const state = computeNavState(
+      makeInput({
+        destination: makeDestination(destination),
+        location: makeLocation({ accuracyM: 10 }),
+      }),
+    );
+    // distance 20m < accuracy 10m * 3 なので hold。
+    expect(state.guidanceAvailability).toBe('hold');
+    expect(state.guidanceIssue).toBe('position');
+  });
+
+  it('方位精度 0（未校正）は hold', () => {
+    const state = computeNavState(makeInput({ heading: makeHeading({ accuracy: 0 }) }));
+    expect(state.guidanceAvailability).toBe('hold');
+    expect(state.guidanceIssue).toBe('heading');
+  });
+
+  it('フィルタが heading transient なら hold、location unavailable なら unavailable', () => {
+    const transientHeading = computeNavState(
+      makeInput({
+        signalQuality: {
+          heading: { mode: 'transient', decision: 'held', reason: 'heading-outlier' },
+          location: { mode: 'normal', decision: 'accepted', reason: null },
+        },
+      }),
+    );
+    expect(transientHeading.guidanceAvailability).toBe('hold');
+    expect(transientHeading.guidanceIssue).toBe('heading');
+
+    const unavailableLocation = computeNavState(
+      makeInput({
+        signalQuality: {
+          heading: { mode: 'normal', decision: 'accepted', reason: null },
+          location: { mode: 'unavailable', decision: 'rejected', reason: 'location-lost' },
+        },
+      }),
+    );
+    expect(unavailableLocation.status).toBe('position-lost');
+    expect(unavailableLocation.guidanceAvailability).toBe('unavailable');
+  });
+
+  it('目的地なし・測位中は案内なし（normal / unavailable position）', () => {
+    expect(computeNavState(makeInput({ destination: null })).guidanceAvailability).toBe('normal');
+    const locating = computeNavState(makeInput({ location: null }));
+    expect(locating.status).toBe('locating');
+    expect(locating.guidanceAvailability).toBe('unavailable');
+    expect(locating.guidanceIssue).toBe('position');
+  });
+});

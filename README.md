@@ -116,4 +116,5 @@ npx eas-cli@latest build -p android --profile preview
 ## 検証レポート
 
 - [実機検証](docs/research/device-verification.md) — D1〜D7・UX 刷新・地図・共有・APK 起動の検証記録（スクリーンショット付き）
+- [方位安定化](docs/research/heading-stabilization.md) — フェーズ1〜2 の実装記録・フェーズ3 設計メモ・実機検証手順
 - [最終検証](docs/research/final-verification.md) — テスト・カバレッジ・バンドル・依存ルール・未確認 API の消化状況

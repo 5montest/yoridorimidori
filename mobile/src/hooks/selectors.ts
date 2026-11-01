@@ -34,6 +34,7 @@ export function selectNavState(
     heading: state.heading,
     nowMonotonicMs: state.nowMonotonicMs,
     headingUnavailable: state.headingUnavailable,
+    signalQuality: state.signalQuality,
   };
   return computeNavState(input, thresholds);
 }

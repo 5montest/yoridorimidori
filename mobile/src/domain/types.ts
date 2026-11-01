@@ -97,6 +97,16 @@ export type GpsAccuracyClass = 'good' | 'fair' | 'poor' | 'unknown';
 /** 方位精度区分。0 は 'uncalibrated'（要校正）として区別する。 */
 export type HeadingAccuracyClass = 'good' | 'fair' | 'poor' | 'uncalibrated' | 'unknown';
 
+/** 案内表示の信頼度（2026-11-01 追加）。
+ * - normal: 通常案内
+ * - hold: 一時保持（前回の値を表示し「確認中」を明示）
+ * - unavailable: 案内保留（不確かな方向を通常表示しない）
+ */
+export type GuidanceAvailability = 'normal' | 'hold' | 'unavailable';
+
+/** 案内を制限している要因（UI の文言の出し分けに使う）。 */
+export type GuidanceIssue = 'position' | 'heading' | 'both' | null;
+
 /** 画面の主状態。優先順位は §6.8。 */
 export type NavStatus =
   | 'no-destination'
@@ -133,4 +143,8 @@ export interface NavState {
   readonly headingAccuracyClass: HeadingAccuracyClass;
   /** 表示順に整列済み（§6.8 の優先順位）。 */
   readonly warnings: readonly WarningCode[];
+  /** 案内表示の信頼度（2026-11-01）。 */
+  readonly guidanceAvailability: GuidanceAvailability;
+  /** 案内を制限している要因（null = 制限なし）。 */
+  readonly guidanceIssue: GuidanceIssue;
 }

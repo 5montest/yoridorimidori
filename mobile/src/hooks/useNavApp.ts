@@ -2,6 +2,18 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { HEADING_DISPATCH_MIN_INTERVAL_MS, type Thresholds } from '../domain/constants';
 import { elapsedMs } from '../domain/freshness';
 import { DEMO_PRESETS } from '../domain/presets';
+import {
+  createHeadingFilterState,
+  filterHeadingSample,
+} from '../domain/headingFilter';
+import {
+  createLocationFilterState,
+  filterLocationSample,
+} from '../domain/locationFilter';
+import {
+  INITIAL_SIGNAL_QUALITY_STATE,
+  type SignalQualityState,
+} from '../domain/signalQuality';
 import type { ScenarioId } from '../domain/scenario';
 import type {
   Destination,
@@ -125,6 +137,28 @@ export function useNavApp(deps: NavAppDeps): NavApp {
   const latestHeadingRef = useRef<HeadingFix | null>(null);
   /** 方位 dispatch の間引き用（最後に dispatch した単調時刻）。 */
   const lastHeadingDispatchMsRef = useRef<number | null>(null);
+  /** 方位フィルタの状態（2026-11-01）。 */
+  const headingFilterRef = useRef(createHeadingFilterState());
+  /** 位置フィルタの状態（2026-11-01）。 */
+  const locationFilterRef = useRef(createLocationFilterState());
+  /** 信号品質（位置・方位）の最新状態。 */
+  const signalQualityRef = useRef<SignalQualityState>(INITIAL_SIGNAL_QUALITY_STATE);
+  /** 信号品質ログの dispatch 間引き用。 */
+  const lastSignalQualityDispatchMsRef = useRef<number | null>(null);
+
+  /** 信号品質を reducer に反映する（ログ用に間引く）。 */
+  const applySignalQuality = useCallback(
+    (next: SignalQualityState, nowMonotonicMs: number) => {
+      signalQualityRef.current = next;
+      const last = lastSignalQualityDispatchMsRef.current;
+      if (last !== null && nowMonotonicMs - last < HEADING_DISPATCH_MIN_INTERVAL_MS) {
+        return;
+      }
+      lastSignalQualityDispatchMsRef.current = nowMonotonicMs;
+      dispatch({ type: 'signal/quality', quality: next, atMonotonicMs: nowMonotonicMs });
+    },
+    [],
+  );
   /** 起動ロードを 1 回だけ実行する。 */
   const bootStartedRef = useRef(false);
   /** 位置購読の張り直し用カウンタ（`retryLocation()` で増やす）。 */
@@ -241,6 +275,7 @@ export function useNavApp(deps: NavAppDeps): NavApp {
     sampleLogRepository,
     dispatchError,
     dispatchStorageWarning,
+    applySignalQuality,
   ]);
 
   // ── 権限フロー（起動時 1 回。再要求はユーザー操作起点のみ）───────────────
@@ -317,6 +352,9 @@ export function useNavApp(deps: NavAppDeps): NavApp {
     const activeHeading =
       useMock && mockHeadingProvider !== undefined ? mockHeadingProvider : headingProvider;
     lastHeadingDispatchMsRef.current = null;
+    headingFilterRef.current = createHeadingFilterState();
+    locationFilterRef.current = createLocationFilterState();
+    lastSignalQualityDispatchMsRef.current = null;
 
     const onProviderError = (error: ProviderError) => {
       if (disposed) {
@@ -365,8 +403,27 @@ export function useNavApp(deps: NavAppDeps): NavApp {
           if (disposed) {
             return;
           }
-          dispatch({ type: 'sensor/location', fix });
-          recordSample(fix);
+          const nowMonotonicMs = clock.nowMonotonicMs();
+          const filtered = filterLocationSample(locationFilterRef.current, {
+            reading: fix,
+            nowMonotonicMs,
+          });
+          locationFilterRef.current = filtered.state;
+          applySignalQuality(
+            {
+              ...signalQualityRef.current,
+              location: {
+                mode: filtered.mode,
+                decision: filtered.decision,
+                reason: filtered.reason,
+              },
+            },
+            nowMonotonicMs,
+          );
+          if (filtered.acceptedFix !== null) {
+            dispatch({ type: 'sensor/location', fix: filtered.acceptedFix });
+            recordSample(filtered.acceptedFix);
+          }
         },
         onProviderError,
       )
@@ -384,8 +441,24 @@ export function useNavApp(deps: NavAppDeps): NavApp {
       if (disposed) {
         return;
       }
-      latestHeadingRef.current = fix;
       const nowMonotonicMs = clock.nowMonotonicMs();
+      const filtered = filterHeadingSample(headingFilterRef.current, {
+        reading: fix,
+        nowMonotonicMs,
+      });
+      headingFilterRef.current = filtered.state;
+      latestHeadingRef.current = filtered.acceptedFix ?? latestHeadingRef.current;
+      applySignalQuality(
+        {
+          ...signalQualityRef.current,
+          heading: {
+            mode: filtered.mode,
+            decision: filtered.decision,
+            reason: filtered.reason,
+          },
+        },
+        nowMonotonicMs,
+      );
       const lastDispatchedMs = lastHeadingDispatchMsRef.current;
       if (
         lastDispatchedMs !== null &&
@@ -394,7 +467,9 @@ export function useNavApp(deps: NavAppDeps): NavApp {
         return;
       }
       lastHeadingDispatchMsRef.current = nowMonotonicMs;
-      dispatch({ type: 'sensor/heading', fix });
+      if (filtered.acceptedFix !== null) {
+        dispatch({ type: 'sensor/heading', fix: filtered.acceptedFix });
+      }
     };
 
     activeHeading
@@ -447,7 +522,21 @@ export function useNavApp(deps: NavAppDeps): NavApp {
     sampleLogRepository,
     dispatchError,
     dispatchStorageWarning,
+    applySignalQuality,
   ]);
+
+  // ── Mock モード・シナリオ切替時はフィルタを初期化する（履歴を混ぜない） ─────
+  useEffect(() => {
+    headingFilterRef.current = createHeadingFilterState();
+    locationFilterRef.current = createLocationFilterState();
+    lastSignalQualityDispatchMsRef.current = null;
+    signalQualityRef.current = INITIAL_SIGNAL_QUALITY_STATE;
+    dispatch({
+      type: 'signal/quality',
+      quality: INITIAL_SIGNAL_QUALITY_STATE,
+      atMonotonicMs: clock.nowMonotonicMs(),
+    });
+  }, [state.mockMode, state.scenarioId, clock]);
 
   // ── 1 秒ティッカー（鮮度表示の更新）────────────────────────────────────────
   const dispatchTick = useCallback(() => {
@@ -593,6 +682,9 @@ export function useNavApp(deps: NavAppDeps): NavApp {
         const enabled = !stateRef.current.mockMode;
         dispatch({ type: 'mock/toggled', enabled });
         lastHeadingDispatchMsRef.current = null;
+    headingFilterRef.current = createHeadingFilterState();
+    locationFilterRef.current = createLocationFilterState();
+    lastSignalQualityDispatchMsRef.current = null;
         const activeProvider = enabled ? mockLocationProvider : locationProvider;
         if (activeProvider === undefined) {
           return;
