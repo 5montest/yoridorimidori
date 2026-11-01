@@ -613,3 +613,41 @@
 - 到着の複数回連続確認は未実装（品質ゲートのみ）
 - 生データ・採用値・棄却理由の永続ログは未実装（開発メニューの直近 20 件のみ）
 - ジャイロ統合（フェーズ3）は未実装（`docs/research/heading-stabilization.md` に設計メモ）
+
+### 実機検証（2026-11-01 実施・Pixel 4a / Android 13）
+
+APK（`app-debug-standalone.apk`）をインストールし、位置・通知・バックグラウンド位置権限を付与して確認。
+
+| # | 確認項目 | 結果 |
+|---|---|---|
+| 1 | 目的地選択で案内開始 → 通知が表示される | ✅ 通知「**寄鳥美鳥地** / **目的地「メルセデス･ベンツ中央」まで 13.13 km**」を通知シェードで確認 |
+| 2 | 通知本文が実測距離で動的に生成される | ✅ 実 GPS の現在地から計算した距離（13.13 km） |
+| 3 | 前景サービスが動く | ✅ `dumpsys activity services` に `LocationForegroundService`・`isForeground=true foregroundId=1492` |
+| 4 | 案内中は画面がスリープしない | ✅ MainActivity ウィンドウの `fl=KEEP_SCREEN_ON` を確認 |
+| 5 | バックグラウンドでも継続する | ✅ Home で 15 秒待機後もサービス継続・通知残存（`isForeground=true`） |
+| 6 | アプリ終了で案内が終わる | ✅ `am force-stop` でサービス停止（ServiceRecord 消滅）・通知消滅 |
+| 7 | 再起動すると目的地未設定に戻る | ✅ 再起動後は寝姿＋「目的地を選ぶ」（`device-v14-terminated-relaunch-2026-11-01.png`） |
+| 8 | クラッシュ / ANR | ✅ 0 件 |
+
+証跡: `device-v14-guidance-active-2026-11-01.png` / `device-v14-notification-shade-2026-11-01.png` / `device-v14-terminated-relaunch-2026-11-01.png`
+
+> 注: 端末を履歴からスワイプして消す操作ではなく `am force-stop` で「アプリ終了」を再現した（`stopOnTaskRemoved: true` により履歴削除でもサービスは停止する設計）。
+
+### 実機検証（2026-11-01 実施・Pixel 4a / Android 13）
+
+方位安定化のフィルタを実機で確認するため、**検証専用に開発メニューを有効化したビルド**（`devToolsVisible=true` を一時適用）で Mock シナリオを再生した。配布用 APK は開発メニュー非表示のまま。
+
+| # | 確認項目 | 結果 |
+|---|---|---|
+| 1 | Mock ON（開発メニュー） | ✅ 手動入力・12 シナリオが表示される |
+| 2 | シナリオ「方位ジャンプ（180°）」で外れ値を一時保持 | ✅ 鳥が**不透明度 0.7 で保持**され、文言が「目的地は 右ななめ後ろ（**確認中**）」になる（`device-v15-hold-heading-2026-11-01.png`） |
+| 3 | 信号品質ログ（開発メニュー） | ✅ `方位: transient / held / heading-outlier` → 同じ向きが続くと `normal / accepted` に遷移（`device-v15-signal-log-2026-11-01.png`） |
+| 4 | 位置フィルタの平滑化 | ✅ `位置: normal / smoothed` をログで確認 |
+| 5 | クラッシュ / ANR | ✅ 0 件 |
+
+証跡: `device-v15-hold-heading-2026-11-01.png` / `device-v15-hold-heading2-2026-11-01.png` / `device-v15-signal-log-2026-11-01.png`
+
+**未確認（実機）**:
+- 方位精度劣化（3→1→0→不明）による **unavailable** 画面の実機確認（単体テストでは確認済み）
+- GPS 位置飛び・電車移動シナリオの実機挙動
+- **トンネル・電車内での実際の改善**（屋内・静止状態での Mock 検証のみ。実地の磁気外乱・GNSS 異常は未検証）
