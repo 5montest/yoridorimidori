@@ -31,9 +31,9 @@ function forEachFrame(
 
 describe('SCENARIOS — データ不変条件', () => {
   it('12 件定義され、id が一意', () => {
-    expect(SCENARIOS).toHaveLength(12);
+    expect(SCENARIOS).toHaveLength(13);
     const ids = SCENARIOS.map((scenario) => scenario.id);
-    expect(new Set(ids).size).toBe(12);
+    expect(new Set(ids).size).toBe(13);
     expect(ids).toEqual([
       'static',
       'straight',
@@ -47,6 +47,7 @@ describe('SCENARIOS — データ不変条件', () => {
       'gps-jump',
       'train-speed',
       'heading-accuracy-degrade',
+      'gps-recover-train',
     ]);
   });
 

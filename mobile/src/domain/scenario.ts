@@ -14,7 +14,9 @@ export type ScenarioId =
   | 'north-crossing'
   | 'gps-jump'
   | 'train-speed'
-  | 'heading-accuracy-degrade';
+  | 'heading-accuracy-degrade'
+  // 2026-11-03: GPS 途絶後の移動再取得（電車）
+  | 'gps-recover-train';
 
 /** シナリオの 1 キーフレーム（その時刻以降、次のキーフレームまで保持される）。 */
 export interface ScenarioKeyframe {
@@ -210,6 +212,23 @@ function trainSpeedKeyframes(): readonly ScenarioKeyframe[] {
   return frames;
 }
 
+/** GPS 途絶（3〜30 秒）の後に、電車（20m/s）で 600m 先から復帰する。 */
+function gpsRecoverTrainKeyframes(): readonly ScenarioKeyframe[] {
+  const heading = { headingDeg: 90, accuracy: 3, reference: 'true-north' } as const;
+  const frames: ScenarioKeyframe[] = [
+    { atMs: 0, location: FIXED_LOCATION, heading },
+    { atMs: 3_000, location: null, heading },
+  ];
+  for (let index = 0; index <= 15; index += 1) {
+    frames.push({
+      atMs: 30_000 + index * 1_000,
+      location: { point: eastPointAtMeters(600 + index * 20), accuracyM: 8 },
+      heading,
+    });
+  }
+  return frames;
+}
+
 /** 方位精度の劣化（3→1→0→不明→3）。 */
 function headingAccuracyDegradeKeyframes(): readonly ScenarioKeyframe[] {
   const levels: readonly (0 | 1 | 2 | 3 | null)[] = [3, 3, 3, 1, 1, 1, 0, 0, 0, null, null, null, 3, 3, 3];
@@ -333,6 +352,14 @@ export const SCENARIOS: readonly Scenario[] = [
     repeat: true,
     stallAfterMs: null,
     keyframes: headingAccuracyDegradeKeyframes(),
+  },
+  {
+    id: 'gps-recover-train',
+    labelJa: 'GPS 途絶→電車で復帰（600m）',
+    durationMs: 45_000,
+    repeat: true,
+    stallAfterMs: null,
+    keyframes: gpsRecoverTrainKeyframes(),
   },
 ];
 
